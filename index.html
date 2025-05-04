@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>كاميرا المراقبة</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#5D5CDE',
+                    }
+                }
+            }
+        }
+        
+        // تفعيل الوضع الداكن إذا كان مفضلاً
+        if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+        }
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', event => {
+            if (event.matches) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    <style>
+        /* منع الضغط لتحديد النص على iOS */
+        * {
+            -webkit-user-select: none;
+            user-select: none;
+        }
+        
+        /* السماح بتحديد النص في حقول الإدخال */
+        input, textarea {
+            -webkit-user-select: text;
+            user-select: text;
+        }
+        
+        /* منع تكبير/تصغير الصفحة على iOS */
+        html {
+            touch-action: manipulation;
+        }
+        
+        /* تأثير عند الضغط */
+        .tap-highlight {
+            -webkit-tap-highlight-color: rgba(0,0,0,0);
+        }
+        
+        /* تنسيق عناصر التكبير/التصغير */
+        .zoom-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+        
+        .zoom-btn {
+            width: 36px;
+            height: 36px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            cursor: pointer;
+            backdrop-filter: blur(4px);
+            border: none;
+            outline: none;
+        }
+        
+        .zoom-level {
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            border-radius: 12px;
+            padding: 3px 8px;
+            font-size: 12px;
+            text-align: center;
+            backdrop-filter: blur(4px);
+        }
+        
+        /* منع أي تفاعل مع overlay عندما يكون مخفيًا */
+        .hidden {
+            display: none !important;
+            pointer-events: none;
+        }
+        
+        /* عناصر التحكم بالزوم للمشاهد */
+        .viewer-zoom-controls {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            z-index: 10;
+        }
+        
+        /* منع إيقاف الشاشة على iOS */
+        .video-container video {
+            z-index: 1;
+        }
+        
+        /* استخدام -webkit-transform للتكبير لتحسين الأداء */
+        .video-zoom {
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
+            -webkit-transform-origin: center;
+            -webkit-transition: -webkit-transform 0.2s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4">
+    <div class="max-w-3xl mx-auto">
+        <header class="text-center mb-6">
+            <h1 class="text-3xl font-bold text-primary">كاميرا المراقبة</h1>
+            <p class="mt-2">استخدم كاميرا ومايكروفون جهازك كأداة مراقبة</p>
+        </header>
+        
+        <main>
+            <!-- وضع التطبيق -->
+            <div class="mb-6 bg-primary/10 dark:bg-primary/20 p-4 rounded-lg flex flex-wrap gap-4 justify-center">
+                <button id="broadcast-mode-btn" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                    </svg>
+                    وضع البث
+                </button>
+                <button id="viewer-mode-btn" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                    وضع المشاهدة
+                </button>
+            </div>
+            
+            <!-- وضع البث -->
+            <div id="broadcast-mode" class="bg-gray-100 dark:bg-gray-800 rounded-lg p-4 shadow-lg mb-6">
+                <h2 class="text-xl font-bold mb-3 text-center">بث الكاميرا</h2>
+                
+                <!-- عرض الفيديو -->
+                <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
+                    <div id="video-wrapper" class="w-full h-full video-zoom" style="transform: scale(1);">
+                        <video id="video" class="w-full h-full object-cover" autoplay playsinline></video>
+                    </div>
+                    
+                    <!-- عناصر التكبير/التصغير -->
+                    <div id="zoom-controls" class="zoom-controls hidden">
+                        <button id="zoom-in-btn" class="zoom-btn" aria-label="تكبير">+</button>
+                        <div id="zoom-level" class="zoom-level">1x</div>
+                        <button id="zoom-out-btn" class="zoom-btn" aria-label="تصغير">−</button>
+                    </div>
+                    
+                    <div id="permission-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 text-white p-4 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        <p class="text-xl font-bold mb-2">اضغط على زر "بدء البث" للبدء</p>
+                        <p class="text-sm opacity-80">سيتم طلب إذن للوصول إلى الكاميرا والميكروفون</p>
+                    </div>
+                    <div id="error-message" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-red-900 bg-opacity-80 text-white p-4 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-red-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                        <p id="error-text" class="text-xl font-bold mb-2">حدث خطأ في الوصول إلى الكاميرا</p>
+                        <p class="text-sm opacity-80">يرجى التحقق من أذونات الكاميرا في متصفحك</p>
+                    </div>
+                </div>
+                
+                <!-- التحكم -->
+                <div class="flex flex-wrap gap-4 justify-center mb-4">
+                    <button id="start-btn" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                        بدء البث
+                    </button>
+                    <button id="stop-btn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        إيقاف البث
+                    </button>
+                    <button id="switch-camera-btn" class="px-6 py-3 bg-gray-600 hover:bg-gray-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                        </svg>
+                        تبديل الكاميرا
+                    </button>
+                </div>
+                
+                <!-- رمز البث -->
+                <div id="broadcast-id-container" class="hidden mt-4 p-4 bg-gray-200 dark:bg-gray-700 rounded-lg">
+                    <h3 class="font-bold mb-2">رمز البث:</h3>
+                    <div class="flex items-center">
+                        <input id="broadcast-id" type="text" readonly class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-base ml-2" />
+                        <button id="copy-id-btn" class="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors tap-highlight">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <p class="mt-2 text-sm">شارك هذا الرمز مع الأشخاص الذين تريد أن يشاهدوا البث.</p>
+                </div>
+                
+                <!-- حالة الاتصال -->
+                <div class="mt-4 flex items-center justify-between">
+                    <div class="flex items-center">
+                        <div id="status-indicator" class="w-3 h-3 rounded-full bg-gray-400 ml-2"></div>
+                        <span id="status-text">غير متصل</span>
+                    </div>
+                    <div id="viewer-count-container" class="hidden flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <span id="viewer-count">0</span> مشاهد
+                    </div>
+                </div>
+            </div>
+            
+            <!-- وضع المشاهدة -->
+            <div id="viewer-mode" class="hidden bg-gray-100 dark:bg-gray-800 rounded-lg p-4 shadow-lg mb-6">
+                <h2 class="text-xl font-bold mb-3 text-center">مشاهدة البث</h2>
+                
+                <!-- إدخال رمز البث -->
+                <div class="mb-4">
+                    <label for="connect-id" class="block mb-2 font-medium">رمز البث:</label>
+                    <div class="flex items-center">
+                        <input id="connect-id" type="text" class="flex-grow p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-base" placeholder="أدخل رمز البث هنا" />
+                        <button id="connect-btn" class="mr-2 px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                            </svg>
+                            اتصال
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- عرض الفيديو المستقبل -->
+                <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
+                    <div id="remote-video-wrapper" class="w-full h-full video-zoom" style="transform: scale(1);">
+                        <video id="remote-video" class="w-full h-full object-cover" autoplay playsinline></video>
+                    </div>
+                    
+                    <!-- عناصر التكبير/التصغير للمشاهد -->
+                    <div id="viewer-zoom-controls" class="viewer-zoom-controls hidden">
+                        <button id="viewer-zoom-in-btn" class="zoom-btn" aria-label="تكبير">+</button>
+                        <div id="viewer-zoom-level" class="zoom-level">1x</div>
+                        <button id="viewer-zoom-out-btn" class="zoom-btn" aria-label="تصغير">−</button>
+                    </div>
+                    
+                    <div id="no-stream-overlay" class="absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 text-white p-4 text-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mb-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                        </svg>
+                        <p class="text-xl font-bold mb-2">لا يوجد بث متصل</p>
+                        <p class="text-sm opacity-80">أدخل رمز البث واضغط على زر الاتصال</p>
+                    </div>
+                    <div id="connecting-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 text-white p-4 text-center">
+                        <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-4"></div>
+                        <p class="text-xl font-bold mb-2">جاري الاتصال...</p>
+                        <p class="text-sm opacity-80">يرجى الانتظار</p>
+                    </div>
+                </div>
+                
+                <!-- التحكم بالمشاهدة -->
+                <div class="flex justify-center">
+                    <button id="disconnect-btn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight" disabled>
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                        قطع الاتصال
+                    </button>
+                </div>
+                
+                <!-- حالة الاتصال للمشاهد -->
+                <div class="mt-4 flex items-center">
+                    <div id="viewer-status-indicator" class="w-3 h-3 rounded-full bg-gray-400 ml-2"></div>
+                    <span id="viewer-status-text">غير متصل</span>
+                </div>
+            </div>
+            
+            <!-- معلومات مفيدة -->
+            <div class="mt-6 bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
+                <h2 class="font-bold text-lg mb-2">معلومات وإرشادات:</h2>
+                <ul class="list-disc list-inside space-y-2 text-sm">
+                    <li>يجب السماح للمتصفح بالوصول إلى الكاميرا والميكروفون عند طلب ذلك.</li>
+                    <li>للبث: قم بتشغيل الكاميرا وشارك رمز البث مع الآخرين.</li>
+                    <li>للمشاهدة: أدخل رمز البث الذي حصلت عليه واضغط على زر "اتصال".</li>
+                    <li>يمكنك استخدام أزرار التكبير (+) والتصغير (-) للتحكم في مستوى التكبير.</li>
+                    <li>لتجنب إغلاق الشاشة على الآيفون، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
+                    <li>يتطلب كلا الجهازين الاتصال بالإنترنت لعمل التطبيق بشكل صحيح.</li>
+                    <li>للاستخدام الأمثل، قم بتثبيت الهاتف في مكان مناسب وتوصيله بشاحن.</li>
+                </ul>
+            </div>
+        </main>
+        
+        <footer class="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
+            <p>© تطبيق كاميرا المراقبة - جميع الحقوق محفوظة</p>
+        </footer>
+    </div>
+
+    <script>
+        // العناصر الرئيسية
+        const videoElement = document.getElementById('video');
+        const videoWrapper = document.getElementById('video-wrapper');
+        const remoteVideoElement = document.getElementById('remote-video');
+        const remoteVideoWrapper = document.getElementById('remote-video-wrapper');
+        const startButton = document.getElementById('start-btn');
+        const stopButton = document.getElementById('stop-btn');
+        const switchCameraButton = document.getElementById('switch-camera-btn');
+        const connectButton = document.getElementById('connect-btn');
+        const disconnectButton = document.getElementById('disconnect-btn');
+        const broadcastModeBtn = document.getElementById('broadcast-mode-btn');
+        const viewerModeBtn = document.getElementById('viewer-mode-btn');
+        const broadcastMode = document.getElementById('broadcast-mode');
+        const viewerMode = document.getElementById('viewer-mode');
+        const broadcastIdContainer = document.getElementById('broadcast-id-container');
+        const broadcastIdInput = document.getElementById('broadcast-id');
+        const copyIdButton = document.getElementById('copy-id-btn');
+        const connectIdInput = document.getElementById('connect-id');
+        const permissionOverlay = document.getElementById('permission-overlay');
+        const noStreamOverlay = document.getElementById('no-stream-overlay');
+        const connectingOverlay = document.getElementById('connecting-overlay');
+        const errorMessage = document.getElementById('error-message');
+        const errorText = document.getElementById('error-text');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const viewerStatusIndicator = document.getElementById('viewer-status-indicator');
+        const viewerStatusText = document.getElementById('viewer-status-text');
+        const viewerCountContainer = document.getElementById('viewer-count-container');
+        const viewerCount = document.getElementById('viewer-count');
+        
+        // عناصر التكبير/التصغير
+        const zoomControls = document.getElementById('zoom-controls');
+        const zoomInBtn = document.getElementById('zoom-in-btn');
+        const zoomOutBtn = document.getElementById('zoom-out-btn');
+        const zoomLevel = document.getElementById('zoom-level');
+        
+        // عناصر التكبير/التصغير للمشاهد
+        const viewerZoomControls = document.getElementById('viewer-zoom-controls');
+        const viewerZoomInBtn = document.getElementById('viewer-zoom-in-btn');
+        const viewerZoomOutBtn = document.getElementById('viewer-zoom-out-btn');
+        const viewerZoomLevel = document.getElementById('viewer-zoom-level');
+        
+        // متغيرات عالمية
+        let stream = null;
+        let facingMode = 'user'; // البدء بالكاميرا الأمامية
+        let peer = null;
+        let connections = new Map(); // لتخزين اتصالات المشاهدين
+        let remoteConnection = null; // اتصال المشاهد بالبث
+        let currentViewers = 0;
+        let currentZoom = 1.0; // قيمة التكبير الافتراضية
+        let viewerZoom = 1.0; // قيمة التكبير للمشاهد
+        let zoomCapabilities = false; // هل يدعم الجهاز تكبير الكاميرا
+        let videoTrack = null; // مسار الفيديو
+        
+        // منع إغلاق الشاشة
+        function preventSleep() {
+            if (navigator.wakeLock) {
+                navigator.wakeLock.request('screen').catch(err => {
+                    console.log('Wake Lock error:', err.name, err.message);
+                });
+            }
+        }
+        
+        // تحديد وضع التطبيق الافتراضي
+        let appMode = 'broadcast';
+        
+        // عرض وضع البث
+        function showBroadcastMode() {
+            broadcastMode.classList.remove('hidden');
+            viewerMode.classList.add('hidden');
+            broadcastModeBtn.classList.remove('bg-gray-600');
+            broadcastModeBtn.classList.add('bg-primary');
+            viewerModeBtn.classList.remove('bg-primary');
+            viewerModeBtn.classList.add('bg-gray-600');
+            appMode = 'broadcast';
+            
+            // منع تنشيط ميزة التكبير/التصغير حتى يتم تشغيل الكاميرا
+            zoomControls.classList.add('hidden');
+            
+            // منع النوم في وضع البث
+            preventSleep();
+        }
+        
+        // عرض وضع المشاهدة
+        function showViewerMode() {
+            broadcastMode.classList.add('hidden');
+            viewerMode.classList.remove('hidden');
+            broadcastModeBtn.classList.remove('bg-primary');
+            broadcastModeBtn.classList.add('bg-gray-600');
+            viewerModeBtn.classList.remove('bg-gray-600');
+            viewerModeBtn.classList.add('bg-primary');
+            appMode = 'viewer';
+            
+            // إيقاف الكاميرا إذا كانت تعمل
+            if (stream) {
+                stopCamera();
+            }
+            
+            // إيقاف البث إذا كان قيد التشغيل
+            if (peer && appMode === 'broadcast') {
+                stopBroadcast();
+            }
+            
+            // منع النوم في وضع المشاهدة
+            preventSleep();
+        }
+        
+        // التحقق من دعم الكاميرا
+        function checkCameraSupport() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showError('متصفحك لا يدعم الوصول إلى الكاميرا');
+                startButton.disabled = true;
+                return false;
+            }
+            return true;
+        }
+        
+        // تحديث حالة الاتصال للبث
+        function updateStatus(isConnected) {
+            if (isConnected) {
+                statusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
+                statusIndicator.classList.add('bg-green-500');
+                statusText.textContent = 'متصل ويعمل';
+            } else {
+                statusIndicator.classList.remove('bg-green-500', 'bg-red-500');
+                statusIndicator.classList.add('bg-gray-400');
+                statusText.textContent = 'غير متصل';
+            }
+        }
+        
+        // تحديث حالة الاتصال للمشاهد
+        function updateViewerStatus(isConnected) {
+            if (isConnected) {
+                viewerStatusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
+                viewerStatusIndicator.classList.add('bg-green-500');
+                viewerStatusText.textContent = 'متصل بالبث';
+                viewerZoomControls.classList.remove('hidden');
+            } else {
+                viewerStatusIndicator.classList.remove('bg-green-500', 'bg-red-500');
+                viewerStatusIndicator.classList.add('bg-gray-400');
+                viewerStatusText.textContent = 'غير متصل';
+                viewerZoomControls.classList.add('hidden');
+            }
+        }
+        
+        // تحديث عدد المشاهدين
+        function updateViewerCount() {
+            viewerCount.textContent = currentViewers;
+            if (currentViewers > 0) {
+                viewerCountContainer.classList.remove('hidden');
+            } else {
+                viewerCountContainer.classList.add('hidden');
+            }
+        }
+        
+        // إظهار رسالة خطأ
+        function showError(message) {
+            errorText.textContent = message;
+            errorMessage.classList.remove('hidden');
+            permissionOverlay.classList.add('hidden');
+            statusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
+            statusIndicator.classList.add('bg-red-500');
+            statusText.textContent = 'حدث خطأ';
+        }
+        
+        // إظهار رسالة خطأ للمشاهد
+        function showViewerError(message) {
+            noStreamOverlay.querySelector('p.text-xl').textContent = message;
+            noStreamOverlay.classList.remove('hidden');
+            connectingOverlay.classList.add('hidden');
+            viewerStatusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
+            viewerStatusIndicator.classList.add('bg-red-500');
+            viewerStatusText.textContent = 'حدث خطأ';
+        }
+        
+        // إخفاء رسالة الخطأ
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+        
+        // إنشاء معرف فريد للبث
+        function generateBroadcastId() {
+            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            let id = '';
+            for (let i = 0; i < 6; i++) {
+                id += chars.charAt(Math.floor(Math.random() * chars.length));
+            }
+            return id;
+        }
+        
+        // تغيير مستوى التكبير للكاميرا (API)
+        async function setZoom(zoomValue) {
+            if (!videoTrack) return;
+            
+            // تحديث متغير التكبير العالمي
+            currentZoom = Math.max(1, Math.min(5, zoomValue));
+            
+            try {
+                // محاولة تطبيق التكبير باستخدام API
+                if (zoomCapabilities) {
+                    const capabilities = videoTrack.getCapabilities();
+                    if (capabilities.zoom) {
+                        const min = capabilities.zoom.min || 1;
+                        const max = capabilities.zoom.max || 10;
+                        const scaledZoom = min + (currentZoom - 1) * (max - min) / 4;
+                        
+                        await videoTrack.applyConstraints({
+                            advanced: [{zoom: scaledZoom}]
+                        });
+                    }
+                } else {
+                    // استخدام التكبير القائم على CSS
+                    videoWrapper.style.transform = `scale(${currentZoom})`;
+                }
+                
+                // تحديث عرض مستوى التكبير
+                zoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
+            } catch (err) {
+                console.error('خطأ في تطبيق التكبير:', err);
+                
+                // استخدام التكبير القائم على CSS كخطة بديلة
+                zoomCapabilities = false;
+                videoWrapper.style.transform = `scale(${currentZoom})`;
+                zoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
+            }
+        }
+        
+        // تغيير مستوى التكبير في وضع المشاهدة
+        function setViewerZoom(zoomValue) {
+            viewerZoom = Math.max(1, Math.min(5, zoomValue));
+            remoteVideoWrapper.style.transform = `scale(${viewerZoom})`;
+            viewerZoomLevel.textContent = `${viewerZoom.toFixed(1)}x`;
+        }
+        
+        // تكبير عرض الفيديو
+        function zoomIn() {
+            if (videoTrack) {
+                setZoom(currentZoom + 0.5);
+            }
+        }
+        
+        // تصغير عرض الفيديو
+        function zoomOut() {
+            if (videoTrack) {
+                setZoom(currentZoom - 0.5);
+            }
+        }
+        
+        // تكبير الفيديو للمشاهد
+        function viewerZoomIn() {
+            setViewerZoom(viewerZoom + 0.5);
+        }
+        
+        // تصغير الفيديو للمشاهد
+        function viewerZoomOut() {
+            setViewerZoom(viewerZoom - 0.5);
+        }
+        
+        // بدء تشغيل الكاميرا
+        async function startCamera() {
+            if (!checkCameraSupport()) return;
+            
+            try {
+                // إغلاق أي اتصال سابق
+                if (stream) {
+                    stopCamera();
+                }
+                
+                hideError();
+                
+                // طلب الوصول إلى الكاميرا والميكروفون
+                stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        facingMode: facingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                });
+                
+                // الحصول على مسار الفيديو
+                videoTrack = stream.getVideoTracks()[0];
+                
+                // تحقق من وجود قدرات التكبير
+                if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
+                    const capabilities = videoTrack.getCapabilities();
+                    zoomCapabilities = capabilities && capabilities.zoom;
+                }
+                
+                // عرض الفيديو
+                videoElement.srcObject = stream;
+                
+                // إظهار عناصر التكبير/التصغير
+                zoomControls.classList.remove('hidden');
+                
+                // إخفاء overlay وتحديث الحالة
+                permissionOverlay.classList.add('hidden');
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                switchCameraButton.disabled = false;
+                
+                // إعادة تعيين قيمة التكبير
+                currentZoom = 1.0;
+                setZoom(currentZoom);
+                
+                // منع إغلاق الشاشة
+                preventSleep();
+                
+                // بدء البث تلقائيًا
+                startBroadcast();
+                
+            } catch (error) {
+                console.error('خطأ في الوصول إلى الكاميرا:', error);
+                
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    showError('تم رفض إذن الوصول إلى الكاميرا');
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    showError('لم يتم العثور على كاميرا في جهازك');
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    showError('الكاميرا مستخدمة بواسطة تطبيق آخر');
+                } else {
+                    showError('خطأ غير معروف: ' + error.message);
+                }
+                
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                switchCameraButton.disabled = true;
+                zoomControls.classList.add('hidden');
+            }
+        }
+        
+        // إيقاف تشغيل الكاميرا
+        function stopCamera() {
+            // إيقاف البث إذا كان قيد التشغيل
+            if (peer && appMode === 'broadcast') {
+                stopBroadcast();
+            }
+            
+            if (stream) {
+                // إيقاف جميع المسارات
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                videoTrack = null;
+                
+                // إعادة تعيين الفيديو
+                videoElement.srcObject = null;
+                
+                // إخفاء عناصر التكبير/التصغير
+                zoomControls.classList.add('hidden');
+                
+                // إظهار overlay وتحديث الحالة
+                permissionOverlay.classList.remove('hidden');
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                switchCameraButton.disabled = true;
+                updateStatus(false);
+                
+                // إعادة تعيين مستوى التكبير
+                currentZoom = 1.0;
+                videoWrapper.style.transform = `scale(${currentZoom})`;
+                zoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
+            }
+        }
+        
+        // تبديل الكاميرا (الأمامية/الخلفية)
+        function switchCamera() {
+            facingMode = facingMode === 'user' ? 'environment' : 'user';
+            if (stream) {
+                // تخزين معرف البث الحالي
+                const currentPeerId = peer ? peer.id : null;
+                
+                // إيقاف البث الحالي
+                if (peer && appMode === 'broadcast') {
+                    stopBroadcast();
+                }
+                
+                // إعادة تشغيل الكاميرا مع الوضع الجديد
+                startCamera().then(() => {
+                    // إعادة استخدام نفس معرف البث إذا كان موجودًا
+                    if (currentPeerId) {
+                        broadcastIdInput.value = currentPeerId;
+                    }
+                });
+            }
+        }
+        
+        // بدء البث
+        function startBroadcast() {
+            if (!stream) {
+                showError('يجب تشغيل الكاميرا أولاً قبل بدء البث');
+                return;
+            }
+            
+            try {
+                // إنشاء اتصال Peer جديد
+                const id = generateBroadcastId();
+                peer = new Peer(id, {
+                    config: {
+                        'iceServers': [
+                            { urls: 'stun:stun.l.google.com:19302' },
+                            { urls: 'stun:stun1.l.google.com:19302' },
+                            { urls: 'stun:stun2.l.google.com:19302' }
+                        ]
+                    }
+                });
+                
+                // رسالة تحميل أثناء الاتصال
+                statusText.textContent = 'جاري الاتصال...';
+                
+                // عند فتح الاتصال
+                peer.on('open', (id) => {
+                    console.log('تم فتح اتصال البث بمعرف:', id);
+                    broadcastIdInput.value = id;
+                    broadcastIdContainer.classList.remove('hidden');
+                    updateStatus(true);
+                    updateViewerCount();
+                });
+                
+                // عند استقبال طلب اتصال من مشاهد
+                peer.on('connection', (conn) => {
+                    console.log('اتصال جديد من:', conn.peer);
+                    
+                    connections.set(conn.peer, conn);
+                    
+                    // عند فتح الاتصال مع المشاهد
+                    conn.on('open', () => {
+                        console.log('تم فتح الاتصال مع المشاهد:', conn.peer);
+                        // إرسال إشعار للمشاهد
+                        conn.send({
+                            type: 'info',
+                            message: 'تم الاتصال بالبث بنجاح'
+                        });
+                        
+                        // زيادة عدد المشاهدين
+                        currentViewers++;
+                        updateViewerCount();
+                    });
+                    
+                    // عند إغلاق الاتصال مع المشاهد
+                    conn.on('close', () => {
+                        console.log('تم إغلاق الاتصال مع المشاهد:', conn.peer);
+                        connections.delete(conn.peer);
+                        
+                        // تقليل عدد المشاهدين
+                        currentViewers = Math.max(0, currentViewers - 1);
+                        updateViewerCount();
+                    });
+                });
+                
+                // استقبال مكالمة من مشاهد
+                peer.on('call', (call) => {
+                    console.log('استقبال مكالمة من:', call.peer);
+                    
+                    // الرد على المكالمة مع تدفق الكاميرا المحلية
+                    call.answer(stream);
+                });
+                
+                // معالجة الأخطاء
+                peer.on('error', (err) => {
+                    console.error('خطأ في اتصال البث:', err);
+                    showError('خطأ في اتصال البث: ' + err.message);
+                });
+                
+            } catch (error) {
+                console.error('خطأ في بدء البث:', error);
+                showError('خطأ في بدء البث: ' + error.message);
+            }
+        }
+        
+        // إيقاف البث
+        function stopBroadcast() {
+            if (peer) {
+                // إغلاق جميع الاتصالات مع المشاهدين
+                connections.forEach((conn) => {
+                    conn.close();
+                });
+                connections.clear();
+                
+                // إغلاق اتصال البث
+                peer.destroy();
+                peer = null;
+                
+                // إعادة تعيين حالة البث
+                broadcastIdContainer.classList.add('hidden');
+                broadcastIdInput.value = '';
+                currentViewers = 0;
+                updateViewerCount();
+                updateStatus(false);
+            }
+        }
+        
+        // الاتصال ببث موجود
+        function connectToBroadcast() {
+            const broadcastId = connectIdInput.value.trim().toUpperCase();
+            
+            if (!broadcastId) {
+                showViewerError('يرجى إدخال رمز البث');
+                return;
+            }
+            
+            try {
+                // إظهار overlay التحميل
+                noStreamOverlay.classList.add('hidden');
+                connectingOverlay.classList.remove('hidden');
+                
+                // إنشاء اتصال Peer جديد للمشاهد
+                if (!peer) {
+                    peer = new Peer(null, {
+                        config: {
+                            'iceServers': [
+                                { urls: 'stun:stun.l.google.com:19302' },
+                                { urls: 'stun:stun1.l.google.com:19302' },
+                                { urls: 'stun:stun2.l.google.com:19302' }
+                            ]
+                        }
+                    });
+                }
+                
+                // رسالة تحميل أثناء الاتصال
+                viewerStatusText.textContent = 'جاري الاتصال...';
+                
+                // عند الاتصال بخادم PeerJS
+                peer.on('open', (id) => {
+                    console.log('تم فتح اتصال المشاهد بمعرف:', id);
+                    
+                    // إنشاء اتصال بيانات مع البث
+                    if (remoteConnection) {
+                        remoteConnection.close();
+                    }
+                    
+                    remoteConnection = peer.connect(broadcastId);
+                    
+                    // عند فتح الاتصال مع البث
+                    remoteConnection.on('open', () => {
+                        console.log('تم الاتصال ببث:', broadcastId);
+                        
+                        // طلب تدفق الفيديو
+                        const call = peer.call(broadcastId, new MediaStream());
+                        
+                        // عند استقبال تدفق الفيديو
+                        call.on('stream', (remoteStream) => {
+                            console.log('تم استقبال تدفق الفيديو');
+                            
+                            // عرض الفيديو
+                            remoteVideoElement.srcObject = remoteStream;
+                            
+                            // منع النوم
+                            preventSleep();
+                            
+                            // إعادة تعيين مستوى التكبير للمشاهد
+                            viewerZoom = 1.0;
+                            setViewerZoom(viewerZoom);
+                            
+                            // إخفاء overlay وتحديث الحالة
+                            connectingOverlay.classList.add('hidden');
+                            updateViewerStatus(true);
+                            disconnectButton.disabled = false;
+                            connectButton.disabled = true;
+                        });
+                        
+                        // معالجة انتهاء المكالمة
+                        call.on('close', () => {
+                            console.log('تم إغلاق المكالمة');
+                            disconnectFromBroadcast();
+                        });
+                        
+                        // معالجة خطأ المكالمة
+                        call.on('error', (err) => {
+                            console.error('خطأ في المكالمة:', err);
+                            showViewerError('خطأ في الاتصال: ' + err.message);
+                            disconnectFromBroadcast();
+                        });
+                    });
+                    
+                    // معالجة انتهاء الاتصال
+                    remoteConnection.on('close', () => {
+                        console.log('تم إغلاق الاتصال مع البث');
+                        disconnectFromBroadcast();
+                    });
+                    
+                    // معالجة خطأ الاتصال
+                    remoteConnection.on('error', (err) => {
+                        console.error('خطأ في الاتصال مع البث:', err);
+                        showViewerError('خطأ في الاتصال: ' + err.message);
+                        disconnectFromBroadcast();
+                    });
+                });
+                
+                // معالجة الأخطاء
+                peer.on('error', (err) => {
+                    console.error('خطأ في اتصال المشاهد:', err);
+                    
+                    if (err.type === 'peer-unavailable') {
+                        showViewerError('رمز البث غير موجود أو غير متصل');
+                    } else {
+                        showViewerError('خطأ في الاتصال: ' + err.message);
+                    }
+                    
+                    // محاولة إغلاق الاتصال
+                    disconnectFromBroadcast();
+                });
+                
+            } catch (error) {
+                console.error('خطأ في الاتصال بالبث:', error);
+                showViewerError('خطأ في الاتصال: ' + error.message);
+            }
+        }
+        
+        // قطع الاتصال بالبث
+        function disconnectFromBroadcast() {
+            // إيقاف الفيديو
+            if (remoteVideoElement.srcObject) {
+                const tracks = remoteVideoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                remoteVideoElement.srcObject = null;
+            }
+            
+            // إغلاق الاتصال
+            if (remoteConnection) {
+                remoteConnection.close();
+                remoteConnection = null;
+            }
+            
+            // إغلاق اتصال Peer
+            if (peer && appMode === 'viewer') {
+                peer.destroy();
+                peer = null;
+            }
+            
+            // إخفاء عناصر التكبير/التصغير للمشاهد
+            viewerZoomControls.classList.add('hidden');
+            
+            // إعادة تعيين الواجهة
+            noStreamOverlay.classList.remove('hidden');
+            connectingOverlay.classList.add('hidden');
+            disconnectButton.disabled = true;
+            connectButton.disabled = false;
+            updateViewerStatus(false);
+            
+            // إعادة تعيين مستوى التكبير للمشاهد
+            viewerZoom = 1.0;
+            remoteVideoWrapper.style.transform = `scale(${viewerZoom})`;
+            viewerZoomLevel.textContent = `${viewerZoom.toFixed(1)}x`;
+        }
+        
+        // نسخ رمز البث إلى الحافظة
+        function copyBroadcastId() {
+            const id = broadcastIdInput.value;
+            if (id) {
+                navigator.clipboard.writeText(id).then(() => {
+                    // نجاح النسخ
+                    const originalText = copyIdButton.innerHTML;
+                    copyIdButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+                    
+                    setTimeout(() => {
+                        copyIdButton.innerHTML = originalText;
+                    }, 2000);
+                }).catch(err => {
+                    console.error('فشل نسخ الرمز:', err);
+                });
+            }
+        }
+        
+        // منع iOS من التكبير عند النقر المزدوج
+        let lastTapTime = 0;
+        function handleTouchStart(event) {
+            const currentTime = new Date().getTime();
+            const tapLength = currentTime - lastTapTime;
+            if (tapLength < 500 && tapLength > 0) {
+                event.preventDefault();
+            }
+            lastTapTime = currentTime;
+        }
+        
+        // تطبيق دعم حركات التمرير
+        function applyTouchSupport() {
+            // منع iOS من التكبير عند النقر المزدوج
+            document.addEventListener('touchstart', handleTouchStart, false);
+            
+            // للآيفون، جعل عناصر التكبير أكبر قليلاً للمس
+            if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+                const zoomButtons = document.querySelectorAll('.zoom-btn');
+                zoomButtons.forEach(btn => {
+                    btn.style.width = '44px';
+                    btn.style.height = '44px';
+                });
+            }
+        }
+        
+        // إضافة مستمعي الأحداث
+        document.addEventListener('DOMContentLoaded', () => {
+            // أزرار التبديل بين الأوضاع
+            broadcastModeBtn.addEventListener('click', showBroadcastMode);
+            viewerModeBtn.addEventListener('click', showViewerMode);
+            
+            // أزرار وضع البث
+            startButton.addEventListener('click', startCamera);
+            stopButton.addEventListener('click', stopCamera);
+            switchCameraButton.addEventListener('click', switchCamera);
+            copyIdButton.addEventListener('click', copyBroadcastId);
+            
+            // أزرار وضع المشاهدة
+            connectButton.addEventListener('click', connectToBroadcast);
+            disconnectButton.addEventListener('click', disconnectFromBroadcast);
+            
+            // أزرار التكبير/التصغير
+            zoomInBtn.addEventListener('click', zoomIn);
+            zoomOutBtn.addEventListener('click', zoomOut);
+            viewerZoomInBtn.addEventListener('click', viewerZoomIn);
+            viewerZoomOutBtn.addEventListener('click', viewerZoomOut);
+            
+            // تطبيق دعم الآيفون
+            applyTouchSupport();
+            
+            // تشغيل وضع البث افتراضيًا
+            showBroadcastMode();
+            
+            // التحقق من دعم الكاميرا
+            checkCameraSupport();
+            
+            // إذا كان الجهاز iOS، نمنع إغلاق الشاشة
+            preventSleep();
+            
+            // تسهيل إدخال رمز البث
+            connectIdInput.addEventListener('input', function() {
+                this.value = this.value.toUpperCase();
+            });
+        });
+    </script>
+</body>
+</html>
