@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>كاميرا المراقبة</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.5.1/dist/peerjs.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -20,7 +20,6 @@
             }
         }
         
-        // تفعيل الوضع الداكن إذا كان مفضلاً
         if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
             document.documentElement.classList.add('dark');
         }
@@ -33,29 +32,24 @@
         });
     </script>
     <style>
-        /* منع الضغط لتحديد النص على iOS */
         * {
             -webkit-user-select: none;
             user-select: none;
         }
         
-        /* السماح بتحديد النص في حقول الإدخال */
         input, textarea {
             -webkit-user-select: text;
             user-select: text;
         }
         
-        /* منع تكبير/تصغير الصفحة على iOS */
         html {
             touch-action: manipulation;
         }
         
-        /* تأثير عند الضغط */
         .tap-highlight {
             -webkit-tap-highlight-color: rgba(0,0,0,0);
         }
         
-        /* تنسيق عناصر التكبير/التصغير */
         .zoom-controls {
             position: absolute;
             bottom: 10px;
@@ -92,13 +86,11 @@
             backdrop-filter: blur(4px);
         }
         
-        /* منع أي تفاعل مع overlay عندما يكون مخفيًا */
         .hidden {
             display: none !important;
             pointer-events: none;
         }
         
-        /* عناصر التحكم بالزوم للمشاهد */
         .viewer-zoom-controls {
             position: absolute;
             bottom: 10px;
@@ -109,7 +101,6 @@
             z-index: 10;
         }
         
-        /* زر ملء الشاشة */
         .fullscreen-btn {
             position: absolute;
             top: 10px;
@@ -130,12 +121,10 @@
             z-index: 10;
         }
         
-        /* منع إيقاف الشاشة على iOS */
         .video-container video {
             z-index: 1;
         }
         
-        /* استخدام -webkit-transform للتكبير لتحسين الأداء */
         .video-zoom {
             transform-origin: center;
             transition: transform 0.2s ease-out;
@@ -143,7 +132,6 @@
             -webkit-transition: -webkit-transform 0.2s ease-out;
         }
         
-        /* نمط الشاشة الكاملة */
         .fullscreen-mode {
             position: fixed;
             top: 0;
@@ -164,7 +152,6 @@
             object-fit: contain;
         }
         
-        /* تنسيق مؤشر قوة الإشارة */
         .signal-indicator {
             display: inline-flex;
             align-items: center;
@@ -189,14 +176,12 @@
         .signal-poor .signal-bar-2, .signal-poor .signal-bar-3, .signal-poor .signal-bar-4 { background-color: #ccc; }
         .signal-poor .signal-bar-1 { background-color: #ef4444; }
         
-        /* نمط لإظهار العد التنازلي لإعادة الاتصال */
         .reconnect-timer {
             font-size: 0.875rem;
             color: #facc15;
             margin-left: 5px;
         }
         
-        /* نمط للحظر المنزلق - تحكم بالصوت */
         .volume-slider {
             -webkit-appearance: none;
             appearance: none;
@@ -226,7 +211,6 @@
             border: none;
         }
         
-        /* عناصر التحكم في الصوت */
         .audio-controls {
             position: absolute;
             bottom: 10px;
@@ -242,7 +226,6 @@
             width: 150px;
         }
         
-        /* وضع ملء الشاشة */
         .in-fullscreen {
             margin-bottom: 20px;
         }
@@ -250,6 +233,36 @@
         .in-fullscreen .video-container {
             height: 100vh;
             max-height: 100vh;
+        }
+        
+        .debug-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px;
+            font-size: 12px;
+            width: 100%;
+            max-height: 30vh;
+            overflow-y: auto;
+            z-index: 9998;
+            font-family: monospace;
+        }
+        
+        /* تحميل للآيفون */
+        .ios-loading {
+            display: inline-block;
+            width: 60px;
+            height: 60px;
+            border: 5px solid rgba(93, 92, 222, 0.3);
+            border-radius: 50%;
+            border-top-color: #5D5CDE;
+            animation: ios-spinner 1s ease-in-out infinite;
+        }
+        
+        @keyframes ios-spinner {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
@@ -435,9 +448,9 @@
                         <p class="text-sm opacity-80">أدخل رمز البث واضغط على زر الاتصال</p>
                     </div>
                     <div id="connecting-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 text-white p-4 text-center">
-                        <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-4"></div>
+                        <div class="ios-loading mb-4"></div>
                         <p class="text-xl font-bold mb-2">جاري الاتصال...</p>
-                        <p class="text-sm opacity-80">يرجى الانتظار</p>
+                        <p id="connecting-status" class="text-sm opacity-80">يرجى الانتظار (<span id="connecting-step">1</span>/3)</p>
                     </div>
                 </div>
                 
@@ -470,6 +483,11 @@
                             <div class="signal-bar signal-bar-4"></div>
                         </div>
                     </div>
+                    <div>
+                        <button id="debug-toggle-btn" class="text-xs bg-gray-500 text-white px-2 py-1 rounded hover:bg-gray-600 transition-colors">
+                            عرض معلومات التصحيح
+                        </button>
+                    </div>
                 </div>
             </div>
             
@@ -477,17 +495,23 @@
             <div class="mt-6 bg-blue-50 dark:bg-blue-900/30 p-4 rounded-lg">
                 <h2 class="font-bold text-lg mb-2">معلومات وإرشادات:</h2>
                 <ul class="list-disc list-inside space-y-2 text-sm">
-                    <li>يجب السماح للمتصفح بالوصول إلى الكاميرا عند طلب ذلك.</li>
+                    <li>يجب أن يكون الجهازان متصلين بالإنترنت (الواي فاي أو بيانات الجوال).</li>
                     <li>للبث: قم بتشغيل الكاميرا وشارك رمز البث مع الآخرين.</li>
                     <li>للمشاهدة: أدخل رمز البث الذي حصلت عليه واضغط على زر "اتصال".</li>
-                    <li>يمكنك استخدام أزرار التكبير (+) والتصغير (-) للتحكم في مستوى التكبير.</li>
-                    <li>يمكنك توسيع العرض أو استخدام ملء الشاشة لرؤية أفضل.</li>
-                    <li>في وضع المشاهدة، يمكنك التحكم في مستوى الصوت.</li>
-                    <li>لتجنب إغلاق الشاشة على الآيفون، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
-                    <li>للاستخدام الأمثل، قم بتثبيت الهاتف في مكان مناسب وتوصيله بشاحن.</li>
+                    <li>في حالة فشل الاتصال، جرب الاتصال بشبكة واي فاي مختلفة أو استخدم بيانات الهاتف.</li>
+                    <li>لأفضل تجربة، استخدم متصفح Chrome أو Safari المحدث إلى أحدث إصدار.</li>
+                    <li>لتجنب إغلاق الشاشة، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
                 </ul>
             </div>
         </main>
+        
+        <div id="debug-panel" class="debug-panel hidden">
+            <div class="flex justify-between items-center mb-2">
+                <h3 class="font-bold">معلومات التصحيح</h3>
+                <button id="clear-debug-btn" class="text-xs bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600 transition-colors">مسح</button>
+            </div>
+            <div id="debug-log" class="whitespace-pre-wrap"></div>
+        </div>
         
         <footer class="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
             <p>© تطبيق كاميرا المراقبة - جميع الحقوق محفوظة</p>
@@ -519,6 +543,7 @@
         const permissionOverlay = document.getElementById('permission-overlay');
         const noStreamOverlay = document.getElementById('no-stream-overlay');
         const connectingOverlay = document.getElementById('connecting-overlay');
+        const connectingStep = document.getElementById('connecting-step');
         const errorMessage = document.getElementById('error-message');
         const errorText = document.getElementById('error-text');
         const statusIndicator = document.getElementById('status-indicator');
@@ -531,6 +556,10 @@
         const viewerReconnectTimer = document.getElementById('viewer-reconnect-timer');
         const signalIndicator = document.getElementById('signal-indicator');
         const viewerSignalIndicator = document.getElementById('viewer-signal-indicator');
+        const debugPanel = document.getElementById('debug-panel');
+        const debugLog = document.getElementById('debug-log');
+        const debugToggleBtn = document.getElementById('debug-toggle-btn');
+        const clearDebugBtn = document.getElementById('clear-debug-btn');
         
         // عناصر التكبير/التصغير
         const zoomControls = document.getElementById('zoom-controls');
@@ -573,24 +602,68 @@
         let lastPeerId = null; // آخر معرف peer تم استخدامه
         let isFullscreen = false; // هل نحن في وضع ملء الشاشة
         let isViewerExpanded = false; // هل عرض المشاهدة موسع
+        let connectionAttempts = 0; // عدد محاولات الاتصال
+        let isDebugMode = false; // هل وضع التصحيح مفعل
         
-        // قائمة خوادم STUN/TURN
+        // تكوين خوادم ICE الموثوقة
         const ICE_SERVERS = [
+            { urls: 'stun:stun.relay.metered.ca:80' },
+            { urls: 'stun:openrelay.metered.ca:80' },
+            { urls: 'stun:global.stun.twilio.com:3478' },
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
             { urls: 'stun:stun2.l.google.com:19302' },
             { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-            // يمكن إضافة خوادم TURN هنا إذا كانت متوفرة
+            { urls: 'stun:stun4.l.google.com:19302' }
         ];
+        
+        // تكوين PeerJS - استخدام خادم موثوق
+        const PEER_CONFIG = {
+            host: 'peerjs-server.herokuapp.com',
+            secure: true,
+            port: 443,
+            path: '/',
+            debug: 1,
+            config: {
+                'iceServers': ICE_SERVERS,
+                'sdpSemantics': 'unified-plan',
+                'iceCandidatePoolSize': 10
+            }
+        };
         
         // منع إغلاق الشاشة
         function preventSleep() {
             if (navigator.wakeLock) {
                 navigator.wakeLock.request('screen').catch(err => {
-                    console.log('Wake Lock error:', err.name, err.message);
+                    logDebug('Wake Lock error: ' + err.name + ' - ' + err.message);
                 });
             }
+        }
+        
+        // وظائف تسجيل معلومات التصحيح
+        function logDebug(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${message}`;
+            console.log(logEntry);
+            
+            if (debugLog) {
+                debugLog.innerHTML = logEntry + '\n' + debugLog.innerHTML;
+                if (debugLog.innerHTML.length > 10000) {
+                    debugLog.innerHTML = debugLog.innerHTML.substring(0, 10000) + '...';
+                }
+            }
+        }
+        
+        function clearDebugLog() {
+            if (debugLog) {
+                debugLog.innerHTML = '';
+            }
+        }
+        
+        function toggleDebugPanel() {
+            isDebugMode = !isDebugMode;
+            debugPanel.classList.toggle('hidden', !isDebugMode);
+            debugToggleBtn.textContent = isDebugMode ? 'إخفاء معلومات التصحيح' : 'عرض معلومات التصحيح';
         }
         
         // تحديد وضع التطبيق الافتراضي
@@ -621,6 +694,8 @@
             
             // منع النوم في وضع البث
             preventSleep();
+            
+            logDebug('تم التبديل إلى وضع البث');
         }
         
         // عرض وضع المشاهدة
@@ -650,6 +725,8 @@
             
             // منع النوم في وضع المشاهدة
             preventSleep();
+            
+            logDebug('تم التبديل إلى وضع المشاهدة');
         }
         
         // التحقق من دعم الكاميرا
@@ -657,6 +734,7 @@
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                 showError('متصفحك لا يدعم الوصول إلى الكاميرا');
                 startButton.disabled = true;
+                logDebug('خطأ: المتصفح لا يدعم الوصول إلى الكاميرا');
                 return false;
             }
             return true;
@@ -746,6 +824,7 @@
             statusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
             statusIndicator.classList.add('bg-red-500');
             statusText.textContent = 'حدث خطأ';
+            logDebug('خطأ: ' + message);
         }
         
         // إظهار رسالة خطأ للمشاهد
@@ -756,6 +835,7 @@
             viewerStatusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
             viewerStatusIndicator.classList.add('bg-red-500');
             viewerStatusText.textContent = 'حدث خطأ';
+            logDebug('خطأ في المشاهدة: ' + message);
         }
         
         // إخفاء رسالة الخطأ
@@ -804,6 +884,7 @@
             
             // بدء العد التنازلي
             updateTimer();
+            logDebug('بدء محاولة إعادة الاتصال ' + (isViewer ? '(مشاهد)' : '(باث)'));
         }
         
         // إيقاف إعادة الاتصال
@@ -817,6 +898,7 @@
             
             reconnectTimer.classList.add('hidden');
             viewerReconnectTimer.classList.add('hidden');
+            logDebug('تم إيقاف محاولات إعادة الاتصال');
         }
         
         // إنشاء معرف فريد للبث
@@ -857,7 +939,7 @@
                 // تحديث عرض مستوى التكبير
                 zoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
             } catch (err) {
-                console.error('خطأ في تطبيق التكبير:', err);
+                logDebug('خطأ في تطبيق التكبير: ' + err.message);
                 
                 // استخدام التكبير القائم على CSS كخطة بديلة
                 zoomCapabilities = false;
@@ -971,17 +1053,30 @@
             }
         }
         
+        // التحقق من الاتصال بالإنترنت
+        function checkInternetConnection() {
+            return navigator.onLine;
+        }
+        
         // بدء تشغيل الكاميرا
         async function startCamera() {
             if (!checkCameraSupport()) return;
             
             try {
+                // التحقق من الاتصال بالإنترنت
+                if (!checkInternetConnection()) {
+                    showError('لا يوجد اتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.');
+                    return;
+                }
+                
                 // إغلاق أي اتصال سابق
                 if (stream) {
                     stopCamera();
                 }
                 
                 hideError();
+                
+                logDebug('جاري طلب الوصول إلى الكاميرا...');
                 
                 // طلب الوصول إلى الكاميرا فقط (بدون ميكروفون)
                 stream = await navigator.mediaDevices.getUserMedia({
@@ -993,6 +1088,8 @@
                     audio: false // تعطيل الميكروفون
                 });
                 
+                logDebug('تم الوصول إلى الكاميرا بنجاح');
+                
                 // الحصول على مسار الفيديو
                 videoTrack = stream.getVideoTracks()[0];
                 
@@ -1000,6 +1097,7 @@
                 if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
                     const capabilities = videoTrack.getCapabilities();
                     zoomCapabilities = capabilities && capabilities.zoom;
+                    logDebug('دعم التكبير: ' + (zoomCapabilities ? 'متاح' : 'غير متاح'));
                 }
                 
                 // عرض الفيديو
@@ -1026,7 +1124,7 @@
                 startBroadcast();
                 
             } catch (error) {
-                console.error('خطأ في الوصول إلى الكاميرا:', error);
+                logDebug('خطأ في الوصول إلى الكاميرا: ' + error.name + ' - ' + error.message);
                 
                 if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
                     showError('تم رفض إذن الوصول إلى الكاميرا');
@@ -1077,12 +1175,16 @@
                 currentZoom = 1.0;
                 videoWrapper.style.transform = `scale(${currentZoom})`;
                 zoomLevel.textContent = `${currentZoom.toFixed(1)}x`;
+                
+                logDebug('تم إيقاف الكاميرا');
             }
         }
         
         // تبديل الكاميرا (الأمامية/الخلفية)
         function switchCamera() {
             facingMode = facingMode === 'user' ? 'environment' : 'user';
+            logDebug('تبديل الكاميرا إلى: ' + facingMode);
+            
             if (stream) {
                 // تخزين معرف البث الحالي
                 const currentPeerId = peer ? peer.id : null;
@@ -1110,17 +1212,20 @@
             }
             
             try {
+                // التحقق من الاتصال بالإنترنت
+                if (!checkInternetConnection()) {
+                    showError('لا يوجد اتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.');
+                    return;
+                }
+                
                 // إنشاء معرف للبث (استخدام المعرف المخصص إذا تم توفيره)
                 const id = customId || generateBroadcastId();
                 lastPeerId = id; // تخزين المعرف لإعادة الاتصال
                 
+                logDebug('بدء البث بمعرف: ' + id);
+                
                 // إنشاء اتصال Peer جديد
-                peer = new Peer(id, {
-                    config: {
-                        'iceServers': ICE_SERVERS
-                    },
-                    debug: 1 // مستوى التصحيح: 0 = خطأ، 1 = تحذير، 2 = معلومات، 3 = تصحيح
-                });
+                peer = new Peer(id, PEER_CONFIG);
                 
                 // إيقاف أي عملية إعادة اتصال سابقة
                 stopReconnection();
@@ -1130,7 +1235,7 @@
                 
                 // عند فتح الاتصال
                 peer.on('open', (id) => {
-                    console.log('تم فتح اتصال البث بمعرف:', id);
+                    logDebug('تم فتح اتصال البث بمعرف: ' + id);
                     broadcastIdInput.value = id;
                     broadcastIdContainer.classList.remove('hidden');
                     updateStatus(true);
@@ -1140,13 +1245,13 @@
                 
                 // عند استقبال طلب اتصال من مشاهد
                 peer.on('connection', (conn) => {
-                    console.log('اتصال جديد من:', conn.peer);
+                    logDebug('اتصال جديد من: ' + conn.peer);
                     
                     connections.set(conn.peer, conn);
                     
                     // عند فتح الاتصال مع المشاهد
                     conn.on('open', () => {
-                        console.log('تم فتح الاتصال مع المشاهد:', conn.peer);
+                        logDebug('تم فتح الاتصال مع المشاهد: ' + conn.peer);
                         // إرسال إشعار للمشاهد
                         conn.send({
                             type: 'info',
@@ -1160,7 +1265,7 @@
                     
                     // عند إغلاق الاتصال مع المشاهد
                     conn.on('close', () => {
-                        console.log('تم إغلاق الاتصال مع المشاهد:', conn.peer);
+                        logDebug('تم إغلاق الاتصال مع المشاهد: ' + conn.peer);
                         connections.delete(conn.peer);
                         
                         // تقليل عدد المشاهدين
@@ -1182,15 +1287,25 @@
                 
                 // استقبال مكالمة من مشاهد
                 peer.on('call', (call) => {
-                    console.log('استقبال مكالمة من:', call.peer);
+                    logDebug('استقبال مكالمة من: ' + call.peer);
                     
                     // الرد على المكالمة مع تدفق الكاميرا المحلية
                     call.answer(stream);
+                    
+                    // عند انتهاء المكالمة
+                    call.on('close', () => {
+                        logDebug('تم إغلاق المكالمة من: ' + call.peer);
+                    });
+                    
+                    // عند حدوث خطأ في المكالمة
+                    call.on('error', (err) => {
+                        logDebug('خطأ في المكالمة: ' + err.message);
+                    });
                 });
                 
                 // معالجة الأخطاء
                 peer.on('error', (err) => {
-                    console.error('خطأ في اتصال البث:', err);
+                    logDebug('خطأ في اتصال البث: ' + err.type + ' - ' + err.message);
                     
                     if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
                         // بدء محاولة إعادة الاتصال
@@ -1203,7 +1318,7 @@
                 
                 // عند قطع الاتصال
                 peer.on('disconnected', () => {
-                    console.log('تم قطع الاتصال مع الخادم');
+                    logDebug('تم قطع الاتصال مع الخادم');
                     updateSignalStrength(0);
                     
                     // محاولة إعادة الاتصال تلقائيًا
@@ -1211,7 +1326,7 @@
                 });
                 
             } catch (error) {
-                console.error('خطأ في بدء البث:', error);
+                logDebug('خطأ في بدء البث: ' + error.message);
                 showError('خطأ في بدء البث: ' + error.message);
             }
         }
@@ -1239,10 +1354,12 @@
                 currentViewers = 0;
                 updateViewerCount();
                 updateStatus(false);
+                
+                logDebug('تم إيقاف البث');
             }
         }
         
-        // الاتصال ببث موجود
+        // الاتصال ببث موجود - محسّن
         function connectToBroadcast(isReconnect = false) {
             const broadcastId = connectIdInput.value.trim().toUpperCase();
             
@@ -1251,32 +1368,50 @@
                 return;
             }
             
+            logDebug('محاولة الاتصال بالبث: ' + broadcastId + (isReconnect ? ' (إعادة اتصال)' : ''));
+            
             try {
+                // التحقق من الاتصال بالإنترنت
+                if (!checkInternetConnection()) {
+                    showViewerError('لا يوجد اتصال بالإنترنت. يرجى التحقق من اتصالك والمحاولة مرة أخرى.');
+                    return;
+                }
+                
                 // إيقاف محاولات إعادة الاتصال السابقة
                 if (!isReconnect) {
                     stopReconnection();
+                    connectionAttempts = 0;
                 }
                 
                 // إظهار overlay التحميل إذا لم نكن في وضع إعادة الاتصال
                 if (!isReconnect) {
                     noStreamOverlay.classList.add('hidden');
                     connectingOverlay.classList.remove('hidden');
+                    connectingStep.textContent = '1';
                 }
                 
                 // إغلاق الاتصال السابق
                 if (peer && !isReconnect) {
                     peer.destroy();
                     peer = null;
+                    connectionAttempts = 0;
+                }
+                
+                // زيادة عدد محاولات الاتصال
+                connectionAttempts++;
+                
+                // تحديث خطوة الاتصال
+                if (!isReconnect) {
+                    setTimeout(() => {
+                        connectingStep.textContent = '2';
+                    }, 1500);
                 }
                 
                 // إنشاء اتصال Peer جديد للمشاهد
                 if (!peer) {
-                    peer = new Peer(null, {
-                        config: {
-                            'iceServers': ICE_SERVERS
-                        },
-                        debug: 1
-                    });
+                    peer = new Peer(null, PEER_CONFIG);
+                    
+                    logDebug('تم إنشاء كائن Peer جديد للمشاهد');
                 }
                 
                 // رسالة تحميل أثناء الاتصال
@@ -1286,18 +1421,45 @@
                 
                 // عند الاتصال بخادم PeerJS
                 peer.on('open', (id) => {
-                    console.log('تم فتح اتصال المشاهد بمعرف:', id);
+                    logDebug('تم فتح اتصال المشاهد بمعرف: ' + id);
+                    
+                    // تحديث خطوة الاتصال
+                    if (!isReconnect) {
+                        connectingStep.textContent = '3';
+                    }
                     
                     // إنشاء اتصال بيانات مع البث
                     if (remoteConnection) {
                         remoteConnection.close();
                     }
                     
-                    remoteConnection = peer.connect(broadcastId);
+                    remoteConnection = peer.connect(broadcastId, {
+                        reliable: true,
+                        serialization: 'json'
+                    });
+                    
+                    // زمن انتهاء المهلة للاتصال
+                    const connectionTimeout = setTimeout(() => {
+                        if (connectionAttempts < 3) {
+                            logDebug('انتهت مهلة الاتصال، إعادة المحاولة...');
+                            // إعادة المحاولة
+                            if (peer) {
+                                peer.destroy();
+                                peer = null;
+                            }
+                            connectToBroadcast(false);
+                        } else {
+                            // فشل بعد 3 محاولات
+                            logDebug('فشل الاتصال بعد 3 محاولات');
+                            showViewerError('تعذر الاتصال بالبث. يرجى التأكد من رمز البث وأن البث مازال نشطًا.');
+                            disconnectFromBroadcast();
+                        }
+                    }, 10000); // 10 ثوانٍ
                     
                     // عند فتح الاتصال مع البث
                     remoteConnection.on('open', () => {
-                        console.log('تم الاتصال ببث:', broadcastId);
+                        clearTimeout(connectionTimeout);
+                        logDebug('تم الاتصال بالبث: ' + broadcastId);
                         
                         // إيقاف محاولات إعادة الاتصال
                         stopReconnection();
@@ -1325,7 +1487,7 @@
                             if (data.type === 'pong') {
                                 // حساب زمن الاستجابة
                                 const pingTime = Date.now() - data.timestamp;
-                                console.log('Ping: ' + pingTime + 'ms');
+                                logDebug('زمن الاستجابة: ' + pingTime + 'ms');
                                 
                                 // تحديث قوة الإشارة بناءً على زمن الاستجابة
                                 let strength = 4;
@@ -1340,9 +1502,21 @@
                         // طلب تدفق الفيديو
                         const call = peer.call(broadcastId, new MediaStream());
                         
+                        logDebug('تم إرسال طلب الاتصال بالفيديو');
+                        
+                        // تحديد زمن انتهاء المهلة للفيديو
+                        const videoTimeout = setTimeout(() => {
+                            if (!remoteVideoElement.srcObject) {
+                                logDebug('انتهت مهلة استقبال الفيديو');
+                                showViewerError('تعذر استقبال فيديو البث. حاول مرة أخرى.');
+                                disconnectFromBroadcast();
+                            }
+                        }, 15000); // 15 ثانية
+                        
                         // عند استقبال تدفق الفيديو
                         call.on('stream', (remoteStream) => {
-                            console.log('تم استقبال تدفق الفيديو');
+                            clearTimeout(videoTimeout);
+                            logDebug('تم استقبال تدفق الفيديو');
                             
                             // عرض الفيديو
                             remoteVideoElement.srcObject = remoteStream;
@@ -1363,11 +1537,15 @@
                             
                             // ضبط مستوى الصوت الافتراضي
                             setVolume(100);
+                            
+                            // إعادة تعيين عدد محاولات الاتصال
+                            connectionAttempts = 0;
                         });
                         
                         // معالجة انتهاء المكالمة
                         call.on('close', () => {
-                            console.log('تم إغلاق المكالمة');
+                            logDebug('تم إغلاق المكالمة');
+                            clearTimeout(videoTimeout);
                             if (!isReconnecting) {
                                 startReconnection(true);
                             }
@@ -1375,10 +1553,10 @@
                         
                         // معالجة خطأ المكالمة
                         call.on('error', (err) => {
-                            console.error('خطأ في المكالمة:', err);
+                            logDebug('خطأ في المكالمة: ' + err.type + ' - ' + (err.message || 'خطأ غير معروف'));
+                            clearTimeout(videoTimeout);
                             
                             if (isReconnect) {
-                                // لا نظهر رسالة خطأ في حالة إعادة الاتصال التلقائية
                                 updateSignalStrength(0, true);
                             } else {
                                 showViewerError('خطأ في الاتصال: ' + err.message);
@@ -1389,7 +1567,8 @@
                     
                     // معالجة انتهاء الاتصال
                     remoteConnection.on('close', () => {
-                        console.log('تم إغلاق الاتصال مع البث');
+                        logDebug('تم إغلاق الاتصال مع البث');
+                        clearTimeout(connectionTimeout);
                         
                         if (!isReconnecting) {
                             startReconnection(true);
@@ -1398,12 +1577,13 @@
                     
                     // معالجة خطأ الاتصال
                     remoteConnection.on('error', (err) => {
-                        console.error('خطأ في الاتصال مع البث:', err);
+                        logDebug('خطأ في الاتصال مع البث: ' + err.type + ' - ' + (err.message || 'خطأ غير معروف'));
+                        clearTimeout(connectionTimeout);
                         
                         if (isReconnect) {
                             updateSignalStrength(0, true);
                         } else {
-                            showViewerError('خطأ في الاتصال: ' + err.message);
+                            showViewerError('خطأ في الاتصال: ' + (err.message || 'خطأ غير معروف'));
                             disconnectFromBroadcast();
                         }
                     });
@@ -1411,11 +1591,10 @@
                 
                 // معالجة الأخطاء
                 peer.on('error', (err) => {
-                    console.error('خطأ في اتصال المشاهد:', err);
+                    logDebug('خطأ في اتصال المشاهد: ' + err.type + ' - ' + (err.message || 'خطأ غير معروف'));
                     
                     if (err.type === 'peer-unavailable') {
                         if (isReconnect) {
-                            // لا نظهر رسالة خطأ في حالة إعادة الاتصال التلقائية
                             updateSignalStrength(0, true);
                         } else {
                             showViewerError('رمز البث غير موجود أو غير متصل');
@@ -1429,7 +1608,7 @@
                         }
                     } else {
                         if (!isReconnect) {
-                            showViewerError('خطأ في الاتصال: ' + err.message);
+                            showViewerError('خطأ في الاتصال: ' + (err.message || 'خطأ غير معروف'));
                             disconnectFromBroadcast();
                         }
                     }
@@ -1437,7 +1616,7 @@
                 
                 // عند قطع الاتصال
                 peer.on('disconnected', () => {
-                    console.log('تم قطع الاتصال مع الخادم');
+                    logDebug('تم قطع الاتصال مع الخادم');
                     updateSignalStrength(0, true);
                     
                     // محاولة إعادة الاتصال تلقائيًا
@@ -1447,7 +1626,7 @@
                 });
                 
             } catch (error) {
-                console.error('خطأ في الاتصال بالبث:', error);
+                logDebug('خطأ في الاتصال بالبث: ' + error.message);
                 
                 if (!isReconnect) {
                     showViewerError('خطأ في الاتصال: ' + error.message);
@@ -1507,6 +1686,11 @@
             viewerZoom = 1.0;
             remoteVideoWrapper.style.transform = `scale(${viewerZoom})`;
             viewerZoomLevel.textContent = `${viewerZoom.toFixed(1)}x`;
+            
+            // إعادة تعيين عدد محاولات الاتصال
+            connectionAttempts = 0;
+            
+            logDebug('تم قطع الاتصال بالبث');
         }
         
         // نسخ رمز البث إلى الحافظة
@@ -1521,8 +1705,10 @@
                     setTimeout(() => {
                         copyIdButton.innerHTML = originalText;
                     }, 2000);
+                    
+                    logDebug('تم نسخ رمز البث: ' + id);
                 }).catch(err => {
-                    console.error('فشل نسخ الرمز:', err);
+                    logDebug('فشل نسخ الرمز: ' + err.message);
                 });
             }
         }
@@ -1551,10 +1737,16 @@
                     btn.style.height = '44px';
                 });
             }
+            
+            logDebug('تم تطبيق دعم اللمس للجهاز: ' + navigator.userAgent);
         }
         
         // إضافة مستمعي الأحداث
         document.addEventListener('DOMContentLoaded', () => {
+            // سجل معلومات الجهاز والاتصال
+            logDebug('نوع الجهاز: ' + navigator.userAgent);
+            logDebug('حالة الاتصال بالإنترنت: ' + (navigator.onLine ? 'متصل' : 'غير متصل'));
+            
             // أزرار التبديل بين الأوضاع
             broadcastModeBtn.addEventListener('click', showBroadcastMode);
             viewerModeBtn.addEventListener('click', showViewerMode);
@@ -1587,6 +1779,23 @@
             connectIdInput.addEventListener('keypress', (e) => {
                 if (e.key === 'Enter') {
                     connectToBroadcast(false);
+                }
+            });
+            
+            // أزرار معلومات التصحيح
+            debugToggleBtn.addEventListener('click', toggleDebugPanel);
+            clearDebugBtn.addEventListener('click', clearDebugLog);
+            
+            // مراقبة حالة الاتصال بالإنترنت
+            window.addEventListener('online', () => {
+                logDebug('تم استعادة الاتصال بالإنترنت');
+            });
+            window.addEventListener('offline', () => {
+                logDebug('تم فقدان الاتصال بالإنترنت');
+                if (appMode === 'broadcast' && peer) {
+                    showError('تم فقدان الاتصال بالإنترنت. سيتم محاولة إعادة الاتصال عند استعادة الاتصال.');
+                } else if (appMode === 'viewer' && remoteConnection) {
+                    showViewerError('تم فقدان الاتصال بالإنترنت. سيتم محاولة إعادة الاتصال عند استعادة الاتصال.');
                 }
             });
             
