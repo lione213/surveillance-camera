@@ -3,74 +3,105 @@
 <html lang="ar">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>مشروع البث</title>
+  <title>بث مباشر</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+    video { width: 90%; max-width: 600px; margin: 15px 0; border: 1px solid #ccc; border-radius: 8px; }
+    #roleSelector { margin-bottom: 20px; }
+  </style>
 </head>
 <body>
-  <h2>مشغل البث</h2>
-  <input id="room-input" placeholder="رمز الغرفة" />
-  <button id="start-button">بدء البث</button>
-  <video id="local-video" autoplay muted playsinline></video>
-  <video id="remote-video" autoplay playsinline></video>
+  <h2>📡 نظام البث المباشر</h2>
 
-  <script src="https://cdn.socket.io/4.0.1/socket.io.min.js"></script>
+  <div id="roleSelector">
+    <label><input type="radio" name="role" value="broadcaster" checked /> مشغل بث</label>
+    <label><input type="radio" name="role" value="viewer" /> مشاهد</label>
+  </div>
+
+  <input type="text" id="roomInput" placeholder="رمز الغرفة" />
+  <button id="startBtn">ابدأ</button>
+
+  <div id="videoContainer">
+    <video id="localVideo" autoplay muted playsinline style="display: none;"></video>
+    <video id="remoteVideo" autoplay playsinline controls style="display: none;"></video>
+  </div>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
   <script>
     const socket = io("https://webrtc-server-gbuq.onrender.com");
-    const startButton = document.getElementById("start-button");
-    const roomInput = document.getElementById("room-input");
-    const localVideo = document.getElementById("local-video");
-    const remoteVideo = document.getElementById("remote-video");
+    const roomInput = document.getElementById("roomInput");
+    const startBtn = document.getElementById("startBtn");
+    const localVideo = document.getElementById("localVideo");
+    const remoteVideo = document.getElementById("remoteVideo");
+    const roleSelector = document.getElementsByName("role");
 
+    let pc;
     let localStream;
-    let peerConnection;
+    let role = "broadcaster";
+    let room = "";
 
-    startButton.onclick = async () => {
-      const room = roomInput.value;
-      if (!room) return alert("يرجى إدخال رمز الغرفة");
-      socket.emit("join", room);
-
-      localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localVideo.srcObject = localStream;
-
-      peerConnection = new RTCPeerConnection();
-      localStream.getTracks().forEach(track => peerConnection.addTrack(track, localStream));
-
-      peerConnection.onicecandidate = event => {
-        if (event.candidate) {
-          socket.emit("signal", {
-            to: remoteSocketId,
-            signal: { candidate: event.candidate }
-          });
-        }
-      };
-
-      peerConnection.ontrack = event => {
-        remoteVideo.srcObject = event.streams[0];
-      };
+    const config = {
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }]
     };
 
-    let remoteSocketId = null;
+    startBtn.onclick = async () => {
+      room = roomInput.value.trim();
+      if (!room) return alert("يرجى إدخال رمز الغرفة");
 
-    socket.on("peer-connected", async id => {
-      remoteSocketId = id;
-
-      const offer = await peerConnection.createOffer();
-      await peerConnection.setLocalDescription(offer);
-      socket.emit("signal", { to: id, signal: { sdp: offer } });
-    });
-
-    socket.on("signal", async data => {
-      if (data.signal.sdp) {
-        await peerConnection.setRemoteDescription(new RTCSessionDescription(data.signal.sdp));
-        if (data.signal.sdp.type === "offer") {
-          const answer = await peerConnection.createAnswer();
-          await peerConnection.setLocalDescription(answer);
-          socket.emit("signal", { to: data.from, signal: { sdp: answer } });
-        }
-      } else if (data.signal.candidate) {
-        await peerConnection.addIceCandidate(new RTCIceCandidate(data.signal.candidate));
+      for (const r of roleSelector) {
+        if (r.checked) role = r.value;
       }
-    });
+
+      pc = new RTCPeerConnection(config);
+
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          socket.emit("candidate", { room, candidate: event.candidate });
+        }
+      };
+
+      if (role === "broadcaster") {
+        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        localVideo.srcObject = localStream;
+        localVideo.style.display = "block";
+
+        localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+        socket.emit("join", room);
+
+        socket.on("viewer-joined", async () => {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit("offer", { room, offer });
+        });
+      } else if (role === "viewer") {
+        remoteVideo.style.display = "block";
+        socket.emit("join", room);
+
+        socket.on("offer", async (offer) => {
+          await pc.setRemoteDescription(new RTCSessionDescription(offer));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit("answer", { room, answer });
+        });
+
+        pc.ontrack = event => {
+          remoteVideo.srcObject = event.streams[0];
+        };
+      }
+
+      socket.on("answer", async (answer) => {
+        await pc.setRemoteDescription(new RTCSessionDescription(answer));
+      });
+
+      socket.on("candidate", async ({ candidate }) => {
+        try {
+          await pc.addIceCandidate(new RTCIceCandidate(candidate));
+        } catch (e) {
+          console.error("خطأ في ICE:", e);
+        }
+      });
+    };
   </script>
 </body>
 </html>
