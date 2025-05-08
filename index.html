@@ -444,11 +444,11 @@
         
         // تكوين خادم PeerJS - استخدام خادم render المخصص
         const PEER_CONFIG = {
-            host: 'webrtc-server-gbuq.onrender.com', // قم بتغيير هذا بعنوان خادم PeerJS الخاص بك
-            secure: true, // لاستخدام HTTPS
-            port: 443, // البورت الافتراضي للـ HTTPS
-            path: '/peerjs', المسار الافتراضي - قد تحتاج لتغييره حسب تكوين خادمك
-            debug: 3, // تسجيل رسائل التصحيح
+            host: 'webrtc-server-gbuq.onrender.com',
+            secure: true,
+            port: 443,
+            path: '/peerjs', // تصحيح هنا - إزالة النص بعد الفاصلة
+            debug: 3,
             config: {
                 'iceServers': [
                     { urls: 'stun:stun.l.google.com:19302' },
@@ -458,9 +458,9 @@
                     { urls: 'stun:stun4.l.google.com:19302' },
                     { urls: 'stun:stun.relay.metered.ca:80' },
                     { urls: 'stun:openrelay.metered.ca:80' }
-                ]
-            }
-        };
+              ]
+           }
+       };
         
         // منع إغلاق الشاشة
         function preventSleep() {
