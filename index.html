@@ -248,6 +248,18 @@
                     </button>
                 </div>
                 
+                <!-- تحكم بالميكروفون -->
+                <div class="flex justify-center mb-4">
+                    <label class="inline-flex items-center cursor-pointer bg-gray-200 dark:bg-gray-700 p-2 rounded-lg">
+                        <input type="checkbox" id="mute-mic-toggle" class="sr-only" checked>
+                        <div class="relative">
+                            <div class="block bg-gray-500 w-10 h-6 rounded-full"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition"></div>
+                        </div>
+                        <span id="mic-status" class="mr-3">كتم الميكروفون</span>
+                    </label>
+                </div>
+                
                 <!-- رمز البث -->
                 <div id="broadcast-id-container" class="hidden mt-4 p-4 bg-gray-200 dark:bg-gray-700 rounded-lg">
                     <h3 class="font-bold mb-2">رمز البث:</h3>
@@ -410,6 +422,8 @@
         const viewerReconnectTimer = document.getElementById('viewer-reconnect-timer');
         const signalIndicator = document.getElementById('signal-indicator');
         const viewerSignalIndicator = document.getElementById('viewer-signal-indicator');
+        const muteMicToggle = document.getElementById('mute-mic-toggle');
+        const micStatus = document.getElementById('mic-status');
         
         // عناصر التكبير/التصغير
         const zoomControls = document.getElementById('zoom-controls');
@@ -434,6 +448,7 @@
         let viewerZoom = 1.0; // قيمة التكبير للمشاهد
         let zoomCapabilities = false; // هل يدعم الجهاز تكبير الكاميرا
         let videoTrack = null; // مسار الفيديو
+        let audioTrack = null; // مسار الصوت
         let isReconnecting = false; // هل نحن في وضع إعادة الاتصال
         let reconnectInterval = null; // الفاصل الزمني لإعادة الاتصال
         let reconnectCount = 0; // عدد محاولات إعادة الاتصال
@@ -441,13 +456,12 @@
         let signalStrength = 0; // قوة الإشارة (0-4)
         let lastPeerId = null; // آخر معرف peer تم استخدامه
         let connectionAttempts = 0; // عدد محاولات الاتصال
+        let isMicMuted = true; // حالة الميكروفون (مكتوم افتراضيًا)
         
-        // تكوين خادم PeerJS - استخدام خادم render المخصص
+        // تكوين خادم PeerJS - استخدام خادم العام بدلاً من الخادم المخصص (تم تغييره)
         const PEER_CONFIG = {
-            host: 'webrtc-server-gbuq.onrender.com', // قم بتغيير هذا بعنوان خادم PeerJS الخاص بك
-            secure: true, // لاستخدام HTTPS
-            port: 443, // البورت الافتراضي للـ HTTPS
-            path: '/', // المسار الافتراضي - قد تحتاج لتغييره حسب تكوين خادمك
+            // استخدام الخادم العام لـ PeerJS للتوافق الأفضل
+            // تعليق التكوين المخصص للخادم واستخدام الخادم العام افتراضيًا
             debug: 3, // تسجيل رسائل التصحيح
             config: {
                 'iceServers': [
@@ -461,6 +475,36 @@
                 ]
             }
         };
+        
+        // تنسيق زر تبديل الميكروفون
+        function updateMicToggleStyle() {
+            const toggle = muteMicToggle;
+            const dot = toggle.nextElementSibling.querySelector('.dot');
+            
+            if (toggle.checked) { // مكتوم
+                dot.classList.add('translate-x-4');
+                toggle.nextElementSibling.querySelector('.block').classList.add('bg-primary');
+                toggle.nextElementSibling.querySelector('.block').classList.remove('bg-gray-500');
+                micStatus.textContent = "كتم الميكروفون";
+                
+                // كتم الصوت إذا كان الميكروفون متاحًا
+                if (audioTrack) {
+                    audioTrack.enabled = false;
+                }
+                isMicMuted = true;
+            } else { // غير مكتوم
+                dot.classList.remove('translate-x-4');
+                toggle.nextElementSibling.querySelector('.block').classList.remove('bg-primary');
+                toggle.nextElementSibling.querySelector('.block').classList.add('bg-gray-500');
+                micStatus.textContent = "تشغيل الميكروفون";
+                
+                // تشغيل الصوت إذا كان الميكروفون متاحًا
+                if (audioTrack) {
+                    audioTrack.enabled = true;
+                }
+                isMicMuted = false;
+            }
+        }
         
         // منع إغلاق الشاشة
         function preventSleep() {
@@ -656,6 +700,7 @@
             statusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
             statusIndicator.classList.add('bg-red-500');
             statusText.textContent = 'حدث خطأ';
+            console.error('خطأ:', message);
         }
         
         // إظهار رسالة خطأ للمشاهد
@@ -666,6 +711,7 @@
             viewerStatusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
             viewerStatusIndicator.classList.add('bg-red-500');
             viewerStatusText.textContent = 'حدث خطأ';
+            console.error('خطأ في المشاهدة:', message);
         }
         
         // إخفاء رسالة الخطأ
@@ -757,14 +803,23 @@
             
             let testPeer = new Peer(null, PEER_CONFIG);
             
-            testPeer.on('open', () => {
-                console.log('✅ تم الاتصال بخادم PeerJS بنجاح');
+            testPeer.on('open', (id) => {
+                console.log('✅ تم الاتصال بخادم PeerJS بنجاح، معرف الاختبار:', id);
                 testPeer.destroy();
             });
             
             testPeer.on('error', (err) => {
                 console.error('❌ فشل الاتصال بخادم PeerJS:', err.type, err.message);
             });
+        }
+        
+        // إدارة حالة الميكروفون
+        function updateMicrophoneState() {
+            if (!audioTrack) return;
+            
+            // تحديث حالة الميكروفون استنادًا إلى الزر التبديلي
+            audioTrack.enabled = !isMicMuted;
+            console.log('تم تحديث حالة الميكروفون:', isMicMuted ? 'مكتوم' : 'قيد التشغيل');
         }
         
         // بدء تشغيل الكاميرا
@@ -789,8 +844,15 @@
                     audio: true
                 });
                 
-                // الحصول على مسار الفيديو
+                // الحصول على مسار الفيديو والصوت
                 videoTrack = stream.getVideoTracks()[0];
+                audioTrack = stream.getAudioTracks()[0];
+                
+                // تطبيق حالة كتم الصوت
+                if (audioTrack) {
+                    audioTrack.enabled = !isMicMuted;
+                    console.log('تم تعيين حالة الميكروفون: ' + (isMicMuted ? 'مكتوم' : 'قيد التشغيل'));
+                }
                 
                 // تحقق من وجود قدرات التكبير
                 if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
@@ -852,6 +914,7 @@
                 stream.getTracks().forEach(track => track.stop());
                 stream = null;
                 videoTrack = null;
+                audioTrack = null;
                 
                 // إعادة تعيين الفيديو
                 videoElement.srcObject = null;
@@ -907,7 +970,9 @@
                 const id = customId || generateBroadcastId();
                 lastPeerId = id; // تخزين المعرف لإعادة الاتصال
                 
-                // إنشاء اتصال Peer جديد مع خادم render
+                console.log('جاري إنشاء بث جديد بمعرف:', id);
+                
+                // إنشاء اتصال Peer جديد (استخدام الخادم العام)
                 peer = new Peer(id, PEER_CONFIG);
                 
                 // إيقاف أي عملية إعادة اتصال سابقة
@@ -988,12 +1053,16 @@
                 
                 // معالجة الأخطاء
                 peer.on('error', (err) => {
-                    console.error('خطأ في اتصال البث:', err);
+                    console.error('خطأ في اتصال البث:', err.type, err.message);
                     
                     if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
                         // بدء محاولة إعادة الاتصال
                         updateSignalStrength(0);
                         startReconnection(false);
+                    } else if (err.type === 'unavailable-id') {
+                        // إذا كان المعرف مستخدمًا بالفعل، نحاول بمعرف جديد
+                        console.log('المعرف مستخدم بالفعل، جاري إنشاء معرف جديد...');
+                        startBroadcast(); // إنشاء معرف جديد
                     } else {
                         showError('خطأ في اتصال البث: ' + err.message);
                     }
@@ -1005,7 +1074,14 @@
                     updateSignalStrength(0);
                     
                     // محاولة إعادة الاتصال تلقائيًا
-                    startReconnection(false);
+                    peer.reconnect();
+                    
+                    // بدء عد تنازلي لإعادة الاتصال إذا فشلت محاولة إعادة الاتصال التلقائية
+                    setTimeout(() => {
+                        if (!peer.open) {
+                            startReconnection(false);
+                        }
+                    }, 5000);
                 });
                 
             } catch (error) {
@@ -1061,6 +1137,7 @@
                     noStreamOverlay.classList.add('hidden');
                     connectingOverlay.classList.remove('hidden');
                     connectingStep.textContent = '1';
+                    console.log('محاولة الاتصال بالبث ذو المعرف:', broadcastId);
                 }
                 
                 // إغلاق الاتصال السابق
@@ -1079,7 +1156,7 @@
                     }, 1500);
                 }
                 
-                // إنشاء اتصال Peer جديد للمشاهد
+                // إنشاء اتصال Peer جديد للمشاهد (استخدام الخادم العام)
                 if (!peer) {
                     peer = new Peer(null, PEER_CONFIG);
                 }
@@ -1289,9 +1366,13 @@
                     updateSignalStrength(0, true);
                     
                     // محاولة إعادة الاتصال تلقائيًا
-                    if (!isReconnecting) {
-                        startReconnection(true);
-                    }
+                    peer.reconnect();
+                    
+                    setTimeout(() => {
+                        if (!peer.open && !isReconnecting) {
+                            startReconnection(true);
+                        }
+                    }, 5000);
                 });
                 
             } catch (error) {
@@ -1391,12 +1472,45 @@
             }
         }
         
+        // تنسيق زر التبديل
+        function setupToggleButton() {
+            const toggle = muteMicToggle;
+            const dot = toggle.nextElementSibling.querySelector('.dot');
+            
+            // تعيين الحالة المبدئية
+            if (toggle.checked) {
+                dot.classList.add('translate-x-4');
+                toggle.nextElementSibling.querySelector('.block').classList.add('bg-primary');
+                toggle.nextElementSibling.querySelector('.block').classList.remove('bg-gray-500');
+            } else {
+                dot.classList.remove('translate-x-4');
+                toggle.nextElementSibling.querySelector('.block').classList.remove('bg-primary');
+                toggle.nextElementSibling.querySelector('.block').classList.add('bg-gray-500');
+            }
+            
+            // تنسيق الزر بتأثير انتقالي
+            toggle.nextElementSibling.querySelector('.dot').style.transition = 'transform 0.3s ease';
+            toggle.nextElementSibling.querySelector('.block').style.transition = 'background-color 0.3s ease';
+        }
+        
         // إضافة مستمعي الأحداث
         document.addEventListener('DOMContentLoaded', () => {
             console.log("تم تحميل الصفحة بالكامل!");
             
+            // ضبط أنماط زر تبديل الميكروفون
+            setupToggleButton();
+            
             // اختبار الاتصال بخادم PeerJS
             testServerConnection();
+
+            // تبديل حالة الميكروفون
+            muteMicToggle.addEventListener('change', () => {
+                updateMicToggleStyle();
+                updateMicrophoneState();
+            });
+            
+            // تطبيق حالة الميكروفون المبدئية
+            updateMicToggleStyle();
 
             // أزرار التبديل بين الأوضاع
             broadcastModeBtn.addEventListener('click', () => {
@@ -1486,6 +1600,17 @@
                 }
             });
         });
+        
+        // تعيين CSS لزر التبديل لتحسين المظهر
+        document.head.appendChild(document.createElement('style')).textContent = `
+            input:checked ~ .relative .dot {
+                transform: translateX(1rem);
+            }
+            
+            input:checked ~ .relative .block {
+                background-color: #5D5CDE;
+            }
+        `;
     </script>
 </body>
 </html>
