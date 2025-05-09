@@ -192,31 +192,6 @@
             margin: 4px 0;
             padding-right: 12px;
         }
-        
-        /* معالجة مشكلة في iOS Safari حيث الفيديو قد لا يظهر */
-        .video-container {
-            -webkit-transform: translateZ(0);
-            transform: translateZ(0);
-        }
-        
-        .video-container video {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            -webkit-transform: translateZ(0);
-            transform: translateZ(0);
-        }
-        
-        /* تصحيح مشكلة عرض الفيديو على Safari */
-        @supports (-webkit-overflow-scrolling: touch) {
-            .video-container video {
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-            }
-        }
     </style>
 </head>
 <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4">
@@ -251,7 +226,7 @@
                 <!-- عرض الفيديو -->
                 <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
                     <div id="video-wrapper" class="w-full h-full video-zoom" style="transform: scale(1);">
-                        <video id="video" autoplay playsinline muted></video>
+                        <video id="video" class="w-full h-full object-cover" autoplay playsinline muted></video>
                     </div>
                     
                     <!-- عناصر التكبير/التصغير -->
@@ -366,7 +341,7 @@
                 <!-- عرض الفيديو المستقبل -->
                 <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
                     <div id="remote-video-wrapper" class="w-full h-full video-zoom" style="transform: scale(1);">
-                        <video id="remote-video" autoplay playsinline></video>
+                        <video id="remote-video" class="w-full h-full object-cover" autoplay playsinline muted></video>
                     </div>
                     
                     <!-- عناصر التكبير/التصغير للمشاهد -->
@@ -392,23 +367,12 @@
                 </div>
                 
                 <!-- التحكم بالمشاهدة -->
-                <div class="flex justify-center mb-4">
+                <div class="flex justify-center">
                     <button id="disconnect-btn" class="px-6 py-3 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight" disabled>
                         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
                         </svg>
                         قطع الاتصال
-                    </button>
-                </div>
-                
-                <!-- زر إعادة تشغيل الفيديو -->
-                <div id="play-button-container" class="flex justify-center mb-4 hidden">
-                    <button id="play-video-btn" class="px-6 py-3 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        تشغيل الفيديو
                     </button>
                 </div>
                 
@@ -424,12 +388,6 @@
                         <div class="signal-bar signal-bar-4"></div>
                     </div>
                 </div>
-                
-                <!-- سجل أحداث الفيديو للتشخيص -->
-                <div id="video-events-log" class="mt-4 p-2 bg-gray-200 dark:bg-gray-700 rounded-lg text-xs h-20 overflow-y-auto hidden">
-                    <h4 class="font-bold mb-1">سجل أحداث الفيديو:</h4>
-                    <ul id="video-events-list" class="list-none space-y-1"></ul>
-                </div>
             </div>
             
             <!-- معلومات مفيدة -->
@@ -439,10 +397,10 @@
                     <li>يجب السماح للمتصفح بالوصول إلى الكاميرا والميكروفون عند طلب ذلك.</li>
                     <li>للبث: قم بتشغيل الكاميرا وشارك رمز البث مع الآخرين.</li>
                     <li>للمشاهدة: أدخل رمز البث الذي حصلت عليه واضغط على زر "اتصال".</li>
-                    <li>إذا توقف الفيديو في جهاز المشاهدة، اضغط على زر "تشغيل الفيديو".</li>
+                    <li>يمكنك استخدام أزرار التكبير (+) والتصغير (-) للتحكم في مستوى التكبير.</li>
                     <li>لتجنب إغلاق الشاشة على الآيفون، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
                     <li>يتطلب كلا الجهازين الاتصال بالإنترنت لعمل التطبيق بشكل صحيح.</li>
-                    <li>في حالة ظهور شاشة سوداء، جرب إعادة الاتصال أو تحديث الصفحة.</li>
+                    <li>للاستخدام الأمثل، قم بتثبيت الهاتف في مكان مناسب وتوصيله بشاحن.</li>
                 </ul>
             </div>
         </main>
@@ -463,8 +421,6 @@
         const switchCameraButton = document.getElementById('switch-camera-btn');
         const connectButton = document.getElementById('connect-btn');
         const disconnectButton = document.getElementById('disconnect-btn');
-        const playVideoButton = document.getElementById('play-video-btn');
-        const playButtonContainer = document.getElementById('play-button-container');
         const broadcastModeBtn = document.getElementById('broadcast-mode-btn');
         const viewerModeBtn = document.getElementById('viewer-mode-btn');
         const broadcastMode = document.getElementById('broadcast-mode');
@@ -490,8 +446,6 @@
         const signalIndicator = document.getElementById('signal-indicator');
         const viewerSignalIndicator = document.getElementById('viewer-signal-indicator');
         const audioToggle = document.getElementById('audio-toggle');
-        const videoEventsLog = document.getElementById('video-events-log');
-        const videoEventsList = document.getElementById('video-events-list');
         
         // عناصر التكبير/التصغير
         const zoomControls = document.getElementById('zoom-controls');
@@ -524,9 +478,6 @@
         let lastPeerId = null; // آخر معرف peer تم استخدامه
         let connectionAttempts = 0; // عدد محاولات الاتصال
         let callConnection = null; // اتصال المكالمة
-        let remoteVideoStream = null; // لتخزين المسار المستقبل للمشاهد
-        let isVideoPlaying = false; // هل الفيديو قيد التشغيل
-        let isDebugMode = false; // وضع التصحيح
         
         // تكوين خادم PeerJS مع خوادم TURN
         const PEER_CONFIG = {
@@ -568,25 +519,6 @@
                 ]
             }
         };
-        
-        // إضافة حدث للتسجيل في وضع التصحيح
-        function logVideoEvent(message) {
-            if (isDebugMode) {
-                const now = new Date();
-                const timestamp = now.toLocaleTimeString() + '.' + now.getMilliseconds().toString().padStart(3, '0');
-                const li = document.createElement('li');
-                li.textContent = `[${timestamp}] ${message}`;
-                videoEventsList.prepend(li);
-                
-                // تحديد عدد العناصر
-                if (videoEventsList.children.length > 50) {
-                    videoEventsList.lastChild.remove();
-                }
-                
-                // إظهار السجل
-                videoEventsLog.classList.remove('hidden');
-            }
-        }
         
         // منع إغلاق الشاشة
         function preventSleep() {
@@ -804,7 +736,6 @@
                     <p>حالة الشبكة: ${navigator.onLine ? 'متصل' : 'غير متصل'}</p>
                     <p>معرف البث: ${connectIdInput.value}</p>
                     <p>وقت الخطأ: ${new Date().toLocaleTimeString()}</p>
-                    <p>حالة الفيديو: ${isVideoPlaying ? 'يعمل' : 'متوقف'}</p>
                 </details>
             `;
             noStreamOverlay.appendChild(detailsElement);
@@ -948,11 +879,6 @@
                 
                 // عرض الفيديو
                 videoElement.srcObject = stream;
-                
-                // الاستماع لأحداث الفيديو
-                videoElement.onloadedmetadata = function() {
-                    videoElement.play().catch(e => console.error("خطأ في تشغيل الفيديو المحلي:", e));
-                };
                 
                 // إظهار عناصر التكبير/التصغير
                 zoomControls.classList.remove('hidden');
@@ -1205,43 +1131,19 @@
         
         // إنشاء مسار صوتي صامت
         function createSilentAudioStream() {
-            try {
-                // إنشاء سياق الصوت
-                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioCtx.createOscillator();
-                const dst = audioCtx.createMediaStreamDestination();
-                oscillator.connect(dst);
-                oscillator.start();
-                
-                // اضبط صوت المسار إلى صفر (صامت)
-                const audioStream = dst.stream;
-                const audioTrack = audioStream.getAudioTracks()[0];
-                audioTrack.enabled = false;
-                
-                return audioStream;
-            } catch (err) {
-                console.error('خطأ في إنشاء مسار صوتي صامت:', err);
-                
-                // إنشاء MediaStream فارغ كبديل
-                return new MediaStream();
-            }
-        }
-        
-        // محاولة تشغيل الفيديو للمشاهد
-        function tryPlayRemoteVideo() {
-            if (remoteVideoElement && remoteVideoElement.srcObject && !isVideoPlaying) {
-                logVideoEvent('محاولة تشغيل الفيديو يدويًا');
-                remoteVideoElement.play()
-                    .then(() => {
-                        isVideoPlaying = true;
-                        logVideoEvent('تم تشغيل الفيديو بنجاح');
-                        playButtonContainer.classList.add('hidden');
-                    })
-                    .catch(err => {
-                        logVideoEvent(`فشل تشغيل الفيديو: ${err.message}`);
-                        playButtonContainer.classList.remove('hidden');
-                    });
-            }
+            // إنشاء سياق الصوت
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioCtx.createOscillator();
+            const dst = audioCtx.createMediaStreamDestination();
+            oscillator.connect(dst);
+            oscillator.start();
+            
+            // اضبط صوت المسار إلى صفر (صامت)
+            const audioStream = dst.stream;
+            const audioTrack = audioStream.getAudioTracks()[0];
+            audioTrack.enabled = false;
+            
+            return audioStream;
         }
         
         // الاتصال ببث موجود
@@ -1298,9 +1200,6 @@
                 if (!isReconnect) {
                     viewerStatusText.textContent = 'جاري الاتصال...';
                 }
-                
-                // إعادة تعيين حالة الفيديو
-                isVideoPlaying = false;
                 
                 // عند الاتصال بخادم PeerJS
                 peer.on('open', (id) => {
@@ -1371,7 +1270,6 @@
                                 // حساب زمن الاستجابة
                                 const pingTime = Date.now() - data.timestamp;
                                 console.log('Ping: ' + pingTime + 'ms');
-                                logVideoEvent(`Ping: ${pingTime}ms`);
                                 
                                 // تحديث قوة الإشارة بناءً على زمن الاستجابة
                                 let strength = 4;
@@ -1390,13 +1288,11 @@
                         callConnection = peer.call(broadcastId, silentAudioStream);
                         
                         console.log('تم إرسال طلب الاتصال بالفيديو');
-                        logVideoEvent('تم إرسال طلب الاتصال بالفيديو');
                         
                         // تحديد زمن انتهاء المهلة للفيديو - زيادة المدة إلى 30 ثانية
                         const videoTimeout = setTimeout(() => {
                             if (!remoteVideoElement.srcObject) {
                                 console.log('انتهت مهلة استقبال الفيديو');
-                                logVideoEvent('انتهت مهلة استقبال الفيديو');
                                 showViewerError('تعذر استقبال فيديو البث. حاول مرة أخرى.');
                                 disconnectFromBroadcast();
                             }
@@ -1406,51 +1302,27 @@
                         callConnection.on('stream', (remoteStream) => {
                             clearTimeout(videoTimeout);
                             console.log('تم استقبال تدفق الفيديو');
-                            logVideoEvent('تم استقبال تدفق الفيديو');
-                            
-                            // تخزين المسار
-                            remoteVideoStream = remoteStream;
                             
                             // عرض الفيديو
                             remoteVideoElement.srcObject = remoteStream;
                             
-                            // تسجيل أحداث الفيديو
-                            remoteVideoElement.onloadedmetadata = function() {
-                                logVideoEvent('تم تحميل metadata الفيديو');
-                                // محاولة تشغيل الفيديو تلقائيًا
-                                tryPlayRemoteVideo();
-                            };
-                            
-                            remoteVideoElement.oncanplay = function() {
-                                logVideoEvent('يمكن تشغيل الفيديو الآن');
-                                tryPlayRemoteVideo();
-                            };
-                            
-                            remoteVideoElement.onplay = function() {
-                                logVideoEvent('بدأ تشغيل الفيديو');
-                                isVideoPlaying = true;
-                                playButtonContainer.classList.add('hidden');
-                            };
-                            
-                            remoteVideoElement.onpause = function() {
-                                logVideoEvent('تم إيقاف الفيديو مؤقتًا');
-                                isVideoPlaying = false;
-                                playButtonContainer.classList.remove('hidden');
-                            };
-                            
-                            remoteVideoElement.onended = function() {
-                                logVideoEvent('انتهى تشغيل الفيديو');
-                                isVideoPlaying = false;
-                                playButtonContainer.classList.remove('hidden');
-                            };
-                            
-                            remoteVideoElement.onerror = function(e) {
-                                logVideoEvent(`حدث خطأ في الفيديو: ${e}`);
-                                playButtonContainer.classList.remove('hidden');
-                            };
-                            
                             // محاولة تشغيل الفيديو
-                            tryPlayRemoteVideo();
+                            remoteVideoElement.play().catch(err => {
+                                console.error('خطأ في تشغيل الفيديو:', err);
+                                // محاولة إعادة التشغيل بعد تأخير
+                                setTimeout(() => {
+                                    remoteVideoElement.play().catch(e => {
+                                        console.error('فشل تشغيل الفيديو مرة أخرى:', e);
+                                        showViewerError('تعذر تشغيل الفيديو. يرجى تحديث الصفحة والمحاولة مرة أخرى.');
+                                    });
+                                }, 500);
+                            });
+                            
+                            // إضافة مستمع للأخطاء على عنصر الفيديو
+                            remoteVideoElement.addEventListener('error', (err) => {
+                                console.error('حدث خطأ في عنصر الفيديو:', err);
+                                showViewerError('حدث خطأ في تشغيل الفيديو');
+                            });
                             
                             // منع النوم
                             preventSleep();
@@ -1473,7 +1345,6 @@
                         // معالجة انتهاء المكالمة
                         callConnection.on('close', () => {
                             console.log('تم إغلاق المكالمة');
-                            logVideoEvent('تم إغلاق المكالمة');
                             clearTimeout(videoTimeout);
                             if (!isReconnecting) {
                                 startReconnection(true);
@@ -1483,7 +1354,6 @@
                         // معالجة خطأ المكالمة
                         callConnection.on('error', (err) => {
                             console.log('خطأ في المكالمة:', err);
-                            logVideoEvent(`خطأ في المكالمة: ${err.message}`);
                             clearTimeout(videoTimeout);
                             
                             if (isReconnect) {
@@ -1499,7 +1369,6 @@
                     // معالجة انتهاء الاتصال
                     remoteConnection.on('close', () => {
                         console.log('تم إغلاق الاتصال مع البث');
-                        logVideoEvent('تم إغلاق الاتصال مع البث');
                         clearTimeout(connectionTimeout);
                         
                         if (!isReconnecting) {
@@ -1510,7 +1379,6 @@
                     // معالجة خطأ الاتصال
                     remoteConnection.on('error', (err) => {
                         console.log('خطأ في الاتصال مع البث:', err);
-                        logVideoEvent(`خطأ في الاتصال مع البث: ${err.message}`);
                         clearTimeout(connectionTimeout);
                         
                         if (isReconnect) {
@@ -1525,7 +1393,6 @@
                 // معالجة الأخطاء
                 peer.on('error', (err) => {
                     console.log('خطأ في اتصال المشاهد:', err);
-                    logVideoEvent(`خطأ في اتصال المشاهد: ${err.type} - ${err.message}`);
                     
                     if (err.type === 'peer-unavailable') {
                         if (isReconnect) {
@@ -1552,7 +1419,6 @@
                 // عند قطع الاتصال
                 peer.on('disconnected', () => {
                     console.log('تم قطع الاتصال مع الخادم');
-                    logVideoEvent('تم قطع الاتصال مع الخادم');
                     updateSignalStrength(0, true);
                     
                     // محاولة إعادة الاتصال تلقائيًا
@@ -1563,7 +1429,6 @@
                 
             } catch (error) {
                 console.log('خطأ في الاتصال بالبث:', error);
-                logVideoEvent(`خطأ في الاتصال بالبث: ${error.message}`);
                 
                 if (!isReconnect) {
                     showViewerError('خطأ في الاتصال: ' + error.message);
@@ -1582,7 +1447,6 @@
                 const tracks = remoteVideoElement.srcObject.getTracks();
                 tracks.forEach(track => track.stop());
                 remoteVideoElement.srcObject = null;
-                remoteVideoStream = null;
             }
             
             // إغلاق الاتصال
@@ -1609,7 +1473,6 @@
             // إعادة تعيين الواجهة
             noStreamOverlay.classList.remove('hidden');
             connectingOverlay.classList.add('hidden');
-            playButtonContainer.classList.add('hidden');
             disconnectButton.disabled = true;
             connectButton.disabled = false;
             updateViewerStatus(false);
@@ -1621,7 +1484,6 @@
             
             // إعادة تعيين عدد محاولات الاتصال
             connectionAttempts = 0;
-            isVideoPlaying = false;
         }
         
         // نسخ رمز البث إلى الحافظة
@@ -1672,9 +1534,6 @@
         document.addEventListener('DOMContentLoaded', () => {
             console.log("تم تحميل الصفحة بالكامل!");
             
-            // تمكين وضع التصحيح للمساعدة في حل المشاكل
-            isDebugMode = true;
-            
             // اختبار الاتصال بخادم PeerJS
             testServerConnection();
 
@@ -1721,12 +1580,6 @@
                 disconnectFromBroadcast();
             });
             
-            playVideoButton.addEventListener('click', () => {
-                console.log("تم النقر على زر تشغيل الفيديو");
-                logVideoEvent("محاولة تشغيل الفيديو يدويًا عبر زر التشغيل");
-                tryPlayRemoteVideo();
-            });
-            
             // أزرار التكبير/التصغير
             zoomInBtn.addEventListener('click', () => {
                 console.log("تم النقر على زر التكبير");
@@ -1746,14 +1599,6 @@
             viewerZoomOutBtn.addEventListener('click', () => {
                 console.log("تم النقر على زر تصغير المشاهد");
                 viewerZoomOut();
-            });
-            
-            // السماح بالنقر على الفيديو لتشغيله (للتوافق مع iOS)
-            remoteVideoElement.addEventListener('click', () => {
-                if (remoteVideoElement.srcObject && !isVideoPlaying) {
-                    logVideoEvent("محاولة تشغيل الفيديو عبر النقر");
-                    tryPlayRemoteVideo();
-                }
             });
             
             // تطبيق دعم الآيفون
