@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>كاميرا المراقبة</title>
+    <title>كاميرا المراقبة المباشرة</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -122,51 +121,6 @@
             -webkit-transition: -webkit-transform 0.2s ease-out;
         }
 
-        /* مؤشر الاتصال */
-        .connection-status {
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 12px;
-            font-size: 12px;
-            z-index: 1000;
-        }
-        
-        /* تنسيق عداد إعادة الاتصال */
-        .reconnect-timer {
-            font-size: 0.875rem;
-            color: #facc15;
-            margin-right: 5px;
-        }
-        
-        /* مؤشر قوة الإشارة */
-        .signal-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 2px;
-            margin-right: 8px;
-        }
-        
-        .signal-bar {
-            width: 3px;
-            background-color: #ccc;
-            border-radius: 1px;
-        }
-        
-        .signal-bar-1 { height: 3px; }
-        .signal-bar-2 { height: 6px; }
-        .signal-bar-3 { height: 9px; }
-        .signal-bar-4 { height: 12px; }
-        
-        .signal-good .signal-bar { background-color: #4ade80; }
-        .signal-medium .signal-bar-3, .signal-medium .signal-bar-4 { background-color: #ccc; }
-        .signal-medium .signal-bar-1, .signal-medium .signal-bar-2 { background-color: #facc15; }
-        .signal-poor .signal-bar-2, .signal-poor .signal-bar-3, .signal-poor .signal-bar-4 { background-color: #ccc; }
-        .signal-poor .signal-bar-1 { background-color: #ef4444; }
-        
         /* تنسيق زر التبديل */
         .toggle-dot {
             transition: transform 0.3s ease;
@@ -183,13 +137,27 @@
         input:checked ~ .relative .toggle-bg {
             background-color: #5D5CDE;
         }
+        
+        /* تنسيق QR Code */
+        #qrcode {
+            margin: 10px auto;
+            max-width: 150px;
+        }
+        
+        /* زيادة مساحة الأهداف اللمسية */
+        @media (pointer: coarse) {
+            button {
+                min-height: 44px;
+                min-width: 44px;
+            }
+        }
     </style>
 </head>
 <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4">
     <div class="max-w-3xl mx-auto">
         <header class="text-center mb-6">
             <h1 class="text-3xl font-bold text-primary">كاميرا المراقبة</h1>
-            <p class="mt-2">استخدم كاميرا ومايكروفون جهازك كأداة مراقبة</p>
+            <p class="mt-2" id="version-info">إصدار مبسط للاتصال المباشر</p>
         </header>
         
         <main>
@@ -277,39 +245,26 @@
                     </label>
                 </div>
                 
-                <!-- رمز البث -->
+                <!-- رابط البث -->
                 <div id="broadcast-id-container" class="hidden mt-4 p-4 bg-gray-200 dark:bg-gray-700 rounded-lg">
-                    <h3 class="font-bold mb-2">رمز البث:</h3>
-                    <div class="flex items-center">
-                        <input id="broadcast-id" type="text" readonly class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-base ml-2" />
-                        <button id="copy-id-btn" class="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors tap-highlight">
+                    <h3 class="font-bold mb-2">رابط البث:</h3>
+                    <div class="flex items-center mb-3">
+                        <input id="broadcast-link" type="text" readonly class="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-base ml-2" />
+                        <button id="copy-link-btn" class="px-4 py-2 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors tap-highlight">
                             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                         </button>
                     </div>
-                    <p class="mt-2 text-sm">شارك هذا الرمز مع الأشخاص الذين تريد أن يشاهدوا البث.</p>
+                    <p class="text-sm">شارك هذا الرابط مع الأشخاص الذين تريد أن يشاهدوا البث.</p>
+                    <div id="qrcode" class="mt-3"></div>
                 </div>
                 
-                <!-- حالة الاتصال -->
-                <div class="mt-4 flex items-center justify-between">
-                    <div class="flex items-center">
-                        <div id="status-indicator" class="w-3 h-3 rounded-full bg-gray-400 ml-2"></div>
-                        <span id="status-text">غير متصل</span>
-                        <span id="reconnect-timer" class="reconnect-timer hidden"></span>
-                        <div id="signal-indicator" class="signal-indicator hidden">
-                            <div class="signal-bar signal-bar-1"></div>
-                            <div class="signal-bar signal-bar-2"></div>
-                            <div class="signal-bar signal-bar-3"></div>
-                            <div class="signal-bar signal-bar-4"></div>
-                        </div>
-                    </div>
-                    <div id="viewer-count-container" class="hidden flex items-center">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                        </svg>
-                        <span id="viewer-count">0</span> مشاهد
+                <!-- إحصائيات -->
+                <div id="stats-container" class="hidden mt-4 p-3 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm">
+                    <div class="flex justify-between">
+                        <div>حالة البث: <span id="broadcast-status" class="font-semibold">جاري الإعداد</span></div>
+                        <div><span id="viewer-count">0</span> مشاهد</div>
                     </div>
                 </div>
             </div>
@@ -317,20 +272,6 @@
             <!-- وضع المشاهدة -->
             <div id="viewer-mode" class="hidden bg-gray-100 dark:bg-gray-800 rounded-lg p-4 shadow-lg mb-6">
                 <h2 class="text-xl font-bold mb-3 text-center">مشاهدة البث</h2>
-                
-                <!-- إدخال رمز البث -->
-                <div class="mb-4">
-                    <label for="connect-id" class="block mb-2 font-medium">رمز البث:</label>
-                    <div class="flex items-center">
-                        <input id="connect-id" type="text" class="flex-grow p-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-base" placeholder="أدخل رمز البث هنا" />
-                        <button id="connect-btn" class="mr-2 px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                            </svg>
-                            اتصال
-                        </button>
-                    </div>
-                </div>
                 
                 <!-- عرض الفيديو المستقبل -->
                 <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
@@ -351,12 +292,28 @@
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                         </svg>
                         <p class="text-xl font-bold mb-2">لا يوجد بث متصل</p>
-                        <p class="text-sm opacity-80">أدخل رمز البث واضغط على زر الاتصال</p>
+                        <p class="text-sm opacity-80">افتح رابط البث أو انقر على "اتصال" للمشاهدة</p>
+                        <div class="mt-4 flex justify-center">
+                            <button id="retry-btn" class="px-6 py-3 bg-primary hover:bg-primary/80 text-white rounded-lg flex items-center justify-center transition-colors text-base tap-highlight">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                                </svg>
+                                إعادة المحاولة
+                            </button>
+                        </div>
                     </div>
                     <div id="connecting-overlay" class="hidden absolute inset-0 flex flex-col items-center justify-center bg-gray-900 bg-opacity-80 text-white p-4 text-center">
                         <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-primary mb-4"></div>
                         <p class="text-xl font-bold mb-2">جاري الاتصال...</p>
-                        <p id="connecting-status" class="text-sm opacity-80">يرجى الانتظار (<span id="connecting-step">1</span>/3)</p>
+                        <p id="connecting-status" class="text-sm opacity-80">يرجى الانتظار</p>
+                    </div>
+                </div>
+                
+                <!-- حالة المشاهدة -->
+                <div id="viewer-stats" class="p-3 bg-gray-200 dark:bg-gray-700 rounded-lg text-sm mb-4">
+                    <div class="flex justify-between">
+                        <div>حالة المشاهدة: <span id="viewer-status" class="font-semibold">غير متصل</span></div>
+                        <div id="connection-quality">جودة الاتصال: <span class="font-semibold">-</span></div>
                     </div>
                 </div>
                 
@@ -369,19 +326,6 @@
                         قطع الاتصال
                     </button>
                 </div>
-                
-                <!-- حالة الاتصال للمشاهد -->
-                <div class="mt-4 flex items-center">
-                    <div id="viewer-status-indicator" class="w-3 h-3 rounded-full bg-gray-400 ml-2"></div>
-                    <span id="viewer-status-text">غير متصل</span>
-                    <span id="viewer-reconnect-timer" class="reconnect-timer hidden"></span>
-                    <div id="viewer-signal-indicator" class="signal-indicator hidden">
-                        <div class="signal-bar signal-bar-1"></div>
-                        <div class="signal-bar signal-bar-2"></div>
-                        <div class="signal-bar signal-bar-3"></div>
-                        <div class="signal-bar signal-bar-4"></div>
-                    </div>
-                </div>
             </div>
             
             <!-- معلومات مفيدة -->
@@ -389,12 +333,11 @@
                 <h2 class="font-bold text-lg mb-2">معلومات وإرشادات:</h2>
                 <ul class="list-disc list-inside space-y-2 text-sm">
                     <li>يجب السماح للمتصفح بالوصول إلى الكاميرا والميكروفون عند طلب ذلك.</li>
-                    <li>للبث: قم بتشغيل الكاميرا وشارك رمز البث مع الآخرين.</li>
-                    <li>للمشاهدة: أدخل رمز البث الذي حصلت عليه واضغط على زر "اتصال".</li>
-                    <li>يمكنك استخدام أزرار التكبير (+) والتصغير (-) للتحكم في مستوى التكبير.</li>
+                    <li>للبث: قم بتشغيل الكاميرا ومشاركة الرابط المتولد مع المشاهدين.</li>
+                    <li>للمشاهدة: انقر على الرابط المشترك من جهاز البث.</li>
+                    <li>تأكد من أن كلا الجهازين متصلان بالإنترنت.</li>
+                    <li>يُفضل استخدام نفس نوع المتصفح (كروم/سفاري) على الجهازين.</li>
                     <li>لتجنب إغلاق الشاشة على الآيفون، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
-                    <li>يتطلب كلا الجهازين الاتصال بالإنترنت لعمل التطبيق بشكل صحيح.</li>
-                    <li>للاستخدام الأمثل، قم بتثبيت الهاتف في مكان مناسب وتوصيله بشاحن.</li>
                 </ul>
             </div>
         </main>
@@ -404,6 +347,9 @@
         </footer>
     </div>
 
+    <!-- مكتبة QR Code -->
+    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
+    
     <script>
         // العناصر الرئيسية
         const videoElement = document.getElementById('video');
@@ -413,34 +359,30 @@
         const startButton = document.getElementById('start-btn');
         const stopButton = document.getElementById('stop-btn');
         const switchCameraButton = document.getElementById('switch-camera-btn');
-        const connectButton = document.getElementById('connect-btn');
+        const retryButton = document.getElementById('retry-btn');
         const disconnectButton = document.getElementById('disconnect-btn');
         const broadcastModeBtn = document.getElementById('broadcast-mode-btn');
         const viewerModeBtn = document.getElementById('viewer-mode-btn');
         const broadcastMode = document.getElementById('broadcast-mode');
         const viewerMode = document.getElementById('viewer-mode');
         const broadcastIdContainer = document.getElementById('broadcast-id-container');
-        const broadcastIdInput = document.getElementById('broadcast-id');
-        const copyIdButton = document.getElementById('copy-id-btn');
-        const connectIdInput = document.getElementById('connect-id');
+        const broadcastLink = document.getElementById('broadcast-link');
+        const copyLinkButton = document.getElementById('copy-link-btn');
         const permissionOverlay = document.getElementById('permission-overlay');
         const noStreamOverlay = document.getElementById('no-stream-overlay');
         const connectingOverlay = document.getElementById('connecting-overlay');
-        const connectingStep = document.getElementById('connecting-step');
+        const connectingStatus = document.getElementById('connecting-status');
         const errorMessage = document.getElementById('error-message');
         const errorText = document.getElementById('error-text');
-        const statusIndicator = document.getElementById('status-indicator');
-        const statusText = document.getElementById('status-text');
-        const viewerStatusIndicator = document.getElementById('viewer-status-indicator');
-        const viewerStatusText = document.getElementById('viewer-status-text');
-        const viewerCountContainer = document.getElementById('viewer-count-container');
-        const viewerCount = document.getElementById('viewer-count');
-        const reconnectTimer = document.getElementById('reconnect-timer');
-        const viewerReconnectTimer = document.getElementById('viewer-reconnect-timer');
-        const signalIndicator = document.getElementById('signal-indicator');
-        const viewerSignalIndicator = document.getElementById('viewer-signal-indicator');
+        const broadcastStatus = document.getElementById('broadcast-status');
+        const viewerStatus = document.getElementById('viewer-status');
+        const connectionQuality = document.getElementById('connection-quality');
+        const viewerCountDisplay = document.getElementById('viewer-count');
+        const statsContainer = document.getElementById('stats-container');
         const muteMicToggle = document.getElementById('mute-mic-toggle');
         const micStatus = document.getElementById('mic-status');
+        const qrcodeContainer = document.getElementById('qrcode');
+        const versionInfo = document.getElementById('version-info');
         
         // عناصر التكبير/التصغير
         const zoomControls = document.getElementById('zoom-controls');
@@ -457,33 +399,28 @@
         // متغيرات عالمية
         let stream = null;
         let facingMode = 'user'; // البدء بالكاميرا الأمامية
-        let peer = null;
-        let connections = new Map(); // لتخزين اتصالات المشاهدين
-        let remoteConnection = null; // اتصال المشاهد بالبث
-        let currentViewers = 0;
         let currentZoom = 1.0; // قيمة التكبير الافتراضية
         let viewerZoom = 1.0; // قيمة التكبير للمشاهد
         let zoomCapabilities = false; // هل يدعم الجهاز تكبير الكاميرا
         let videoTrack = null; // مسار الفيديو
         let audioTrack = null; // مسار الصوت
-        let isReconnecting = false; // هل نحن في وضع إعادة الاتصال
-        let reconnectInterval = null; // الفاصل الزمني لإعادة الاتصال
-        let reconnectCount = 0; // عدد محاولات إعادة الاتصال
-        let reconnectTimeout = 5; // الوقت بالثواني قبل إعادة الاتصال
-        let signalStrength = 0; // قوة الإشارة (0-4)
-        let lastPeerId = null; // آخر معرف peer تم استخدامه
-        let connectionAttempts = 0; // عدد محاولات الاتصال
         let isMicMuted = true; // حالة الميكروفون (مكتوم افتراضيًا)
-        let callConnections = new Set(); // مجموعة لتخزين الاتصالات النشطة
+        let roomId = null; // معرف غرفة البث
+        let connectionMode = ''; // 'broadcaster' or 'viewer'
+        let socket = null; // اتصال WebSocket
+        let peerConnection = null; // اتصال WebRTC
+        let viewerCount = 0; // عدد المشاهدين
+        let reconnectAttempts = 0; // عدد محاولات إعادة الاتصال
+        let reconnectTimer = null; // مؤقت إعادة الاتصال
+        let isConnecting = false; // هل نحن في حالة اتصال؟
         
-        // تكوين خادم ICE مع خوادم STUN و TURN
+        // معلومات الإصدار
+        versionInfo.textContent = `الإصدار 1.0.1 - تحديث ${new Date().toLocaleDateString('ar-SA')}`;
+        
+        // إعدادات WebRTC
         const ICE_SERVERS = [
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' },
-            { urls: 'stun:stun2.l.google.com:19302' },
-            { urls: 'stun:stun3.l.google.com:19302' },
-            { urls: 'stun:stun4.l.google.com:19302' },
-            { urls: 'stun:stun.relay.metered.ca:80' },
             {
                 urls: 'turn:a.relay.metered.ca:80',
                 username: 'e7365018e222648c6ed3909a',
@@ -506,21 +443,12 @@
             }
         ];
         
-        // تكوين خادم PeerJS - استخدام الخادم العام مع خوادم ICE المخصصة
-        const PEER_CONFIG = {
-            debug: 3, // تسجيل رسائل التصحيح
-            config: {
-                'iceServers': ICE_SERVERS,
-                'sdpSemantics': 'unified-plan',
-                'iceCandidatePoolSize': 10
-            }
-        };
+        // سيرفر WebSocket للاتصال
+        const WS_SERVER = "wss://ws.postman-echo.com/raw";
         
         // تنسيق زر تبديل الميكروفون
         function updateMicToggleStyle() {
-            const toggle = muteMicToggle;
-            
-            if (toggle.checked) { // مكتوم
+            if (muteMicToggle.checked) { // مكتوم
                 micStatus.textContent = "كتم الميكروفون";
                 
                 // كتم الصوت إذا كان الميكروفون متاحًا
@@ -562,6 +490,9 @@
             viewerModeBtn.classList.add('bg-gray-600');
             appMode = 'broadcast';
             
+            // تنظيف وضع المشاهدة
+            closePeerConnection();
+            
             // منع تنشيط ميزة التكبير/التصغير حتى يتم تشغيل الكاميرا
             zoomControls.classList.add('hidden');
             
@@ -585,13 +516,22 @@
                 stopCamera();
             }
             
-            // إيقاف البث إذا كان قيد التشغيل
-            if (peer && appMode === 'broadcast') {
-                stopBroadcast();
-            }
-            
             // منع النوم في وضع المشاهدة
             preventSleep();
+            
+            // تحقق ما إذا كان هناك معرف غرفة في الرابط
+            checkUrlForRoomId();
+        }
+        
+        // التحقق من وجود معرف غرفة في الرابط
+        function checkUrlForRoomId() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            
+            if (roomParam) {
+                console.log('تم العثور على معرف غرفة في الرابط:', roomParam);
+                startViewerConnection(roomParam);
+            }
         }
         
         // التحقق من دعم الكاميرا
@@ -604,148 +544,12 @@
             return true;
         }
         
-        // تحديث حالة الاتصال للبث
-        function updateStatus(isConnected) {
-            if (isConnected) {
-                statusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
-                statusIndicator.classList.add('bg-green-500');
-                statusText.textContent = 'متصل ويعمل';
-                signalIndicator.classList.remove('hidden');
-                reconnectTimer.classList.add('hidden');
-            } else {
-                statusIndicator.classList.remove('bg-green-500', 'bg-red-500');
-                statusIndicator.classList.add('bg-gray-400');
-                statusText.textContent = 'غير متصل';
-                signalIndicator.classList.add('hidden');
-                reconnectTimer.classList.add('hidden');
-            }
-        }
-        
-        // تحديث حالة الاتصال للمشاهد
-        function updateViewerStatus(isConnected) {
-            if (isConnected) {
-                viewerStatusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
-                viewerStatusIndicator.classList.add('bg-green-500');
-                viewerStatusText.textContent = 'متصل بالبث';
-                viewerZoomControls.classList.remove('hidden');
-                viewerSignalIndicator.classList.remove('hidden');
-                viewerReconnectTimer.classList.add('hidden');
-            } else {
-                viewerStatusIndicator.classList.remove('bg-green-500', 'bg-red-500');
-                viewerStatusIndicator.classList.add('bg-gray-400');
-                viewerStatusText.textContent = 'غير متصل';
-                viewerZoomControls.classList.add('hidden');
-                viewerSignalIndicator.classList.add('hidden');
-                viewerReconnectTimer.classList.add('hidden');
-            }
-        }
-        
-        // تحديث قوة الإشارة
-        function updateSignalStrength(strength, isViewer = false) {
-            const indicator = isViewer ? viewerSignalIndicator : signalIndicator;
-            
-            // إزالة جميع الفئات
-            indicator.classList.remove('signal-good', 'signal-medium', 'signal-poor');
-            
-            if (strength >= 3) {
-                indicator.classList.add('signal-good');
-            } else if (strength >= 2) {
-                indicator.classList.add('signal-medium');
-            } else {
-                indicator.classList.add('signal-poor');
-            }
-            
-            // تحديث متغير قوة الإشارة العالمي
-            signalStrength = strength;
-        }
-        
-        // بدء إعادة الاتصال تلقائيًا
-        function startReconnection(isViewer = false) {
-            if (isReconnecting) return;
-            
-            isReconnecting = true;
-            reconnectCount = 0;
-            reconnectTimeout = 5;
-            
-            const timerElement = isViewer ? viewerReconnectTimer : reconnectTimer;
-            const statusTextElement = isViewer ? viewerStatusText : statusText;
-            
-            timerElement.classList.remove('hidden');
-            statusTextElement.textContent = 'فقدان الاتصال';
-            console.log(isViewer ? 'بدء إعادة اتصال المشاهد...' : 'بدء إعادة اتصال البث...');
-            
-            function updateTimer() {
-                timerElement.textContent = `(إعادة الاتصال خلال ${reconnectTimeout} ثانية)`;
-                
-                if (reconnectTimeout <= 0) {
-                    reconnectCount++;
-                    reconnectTimeout = Math.min(30, 5 * Math.pow(2, reconnectCount)); // زيادة وقت الانتظار تدريجيًا
-                    
-                    // محاولة إعادة الاتصال
-                    if (isViewer) {
-                        const broadcastId = connectIdInput.value.trim().toUpperCase();
-                        if (broadcastId) {
-                            connectToBroadcast(true);
-                        }
-                    } else {
-                        // إعادة بدء البث باستخدام نفس المعرف
-                        if (lastPeerId) {
-                            startBroadcast(lastPeerId);
-                        }
-                    }
-                } else {
-                    reconnectTimeout--;
-                    reconnectInterval = setTimeout(updateTimer, 1000);
-                }
-            }
-            
-            // بدء العد التنازلي
-            updateTimer();
-        }
-        
-        // إيقاف إعادة الاتصال
-        function stopReconnection() {
-            isReconnecting = false;
-            
-            if (reconnectInterval) {
-                clearTimeout(reconnectInterval);
-                reconnectInterval = null;
-            }
-            
-            reconnectTimer.classList.add('hidden');
-            viewerReconnectTimer.classList.add('hidden');
-        }
-        
-        // تحديث عدد المشاهدين
-        function updateViewerCount() {
-            viewerCount.textContent = currentViewers;
-            if (currentViewers > 0) {
-                viewerCountContainer.classList.remove('hidden');
-            } else {
-                viewerCountContainer.classList.add('hidden');
-            }
-        }
-        
         // إظهار رسالة خطأ
         function showError(message) {
             errorText.textContent = message;
             errorMessage.classList.remove('hidden');
             permissionOverlay.classList.add('hidden');
-            statusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
-            statusIndicator.classList.add('bg-red-500');
-            statusText.textContent = 'حدث خطأ';
             console.error('خطأ:', message);
-        }
-        
-        // إظهار رسالة خطأ للمشاهد
-        function showViewerError(message) {
-            noStreamOverlay.querySelector('p.text-xl').textContent = message;
-            noStreamOverlay.classList.remove('hidden');
-            connectingOverlay.classList.add('hidden');
-            viewerStatusIndicator.classList.remove('bg-green-500', 'bg-gray-400');
-            viewerStatusIndicator.classList.add('bg-red-500');
-            viewerStatusText.textContent = 'حدث خطأ';
-            console.error('خطأ في المشاهدة:', message);
         }
         
         // إخفاء رسالة الخطأ
@@ -754,16 +558,41 @@
         }
         
         // إنشاء معرف فريد للبث
-        function generateBroadcastId() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-            let id = '';
-            for (let i = 0; i < 6; i++) {
-                id += chars.charAt(Math.floor(Math.random() * chars.length));
-            }
-            return id;
+        function generateRoomId() {
+            return Math.random().toString(36).substring(2, 8).toUpperCase();
         }
         
-        // تغيير مستوى التكبير للكاميرا (API)
+        // إنشاء QR Code لرابط البث
+        function generateQRCode(url) {
+            const typeNumber = 4;
+            const errorCorrectionLevel = 'L';
+            const qr = qrcode(typeNumber, errorCorrectionLevel);
+            qr.addData(url);
+            qr.make();
+            qrcodeContainer.innerHTML = qr.createImgTag(5);
+        }
+        
+        // نسخ رابط البث إلى الحافظة
+        function copyBroadcastLink() {
+            const link = broadcastLink.value;
+            if (link) {
+                navigator.clipboard.writeText(link).then(() => {
+                    // نجاح النسخ
+                    const originalText = copyLinkButton.innerHTML;
+                    copyLinkButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
+                    
+                    setTimeout(() => {
+                        copyLinkButton.innerHTML = originalText;
+                    }, 2000);
+                    
+                    console.log('تم نسخ رابط البث');
+                }).catch(err => {
+                    console.error('فشل نسخ الرابط:', err);
+                });
+            }
+        }
+        
+        // تغيير مستوى التكبير للكاميرا
         async function setZoom(zoomValue) {
             if (!videoTrack) return;
             
@@ -831,58 +660,377 @@
             setViewerZoom(viewerZoom - 0.5);
         }
         
-        // اختبار الاتصال بخادم PeerJS وخوادم ICE
-        function testServerConnection() {
-            console.log('اختبار الاتصال بخادم PeerJS وخوادم ICE...');
+        // إنشاء اتصال WebRTC
+        function createPeerConnection() {
+            console.log('إنشاء اتصال WebRTC...');
             
-            // إنشاء اتصال Peer اختباري
-            let testPeer = new Peer(null, PEER_CONFIG);
+            // إغلاق أي اتصال سابق
+            closePeerConnection();
             
-            testPeer.on('open', (id) => {
-                console.log('✅ تم الاتصال بخادم PeerJS بنجاح، معرف الاختبار:', id);
-                
-                // اختبار خوادم ICE
-                const pc = new RTCPeerConnection({iceServers: ICE_SERVERS});
-                
-                pc.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        console.log('تم العثور على مرشح ICE:', event.candidate.type);
-                    }
-                };
-                
-                pc.onicegatheringstatechange = () => {
-                    console.log('حالة جمع ICE:', pc.iceGatheringState);
-                    if (pc.iceGatheringState === 'complete') {
-                        console.log('✅ تم اكتمال جمع مرشحي ICE');
-                        pc.close();
-                        testPeer.destroy();
-                    }
-                };
-                
-                // إنشاء عرض وهمي لاختبار جمع المرشحين
-                pc.createDataChannel('test');
-                pc.createOffer()
-                    .then(offer => pc.setLocalDescription(offer))
-                    .catch(err => {
-                        console.error('❌ خطأ في اختبار ICE:', err);
-                        pc.close();
-                        testPeer.destroy();
+            // إنشاء اتصال جديد
+            peerConnection = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+            
+            // تسجيل أحداث الاتصال
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('تم العثور على مرشح ICE:', event.candidate.type);
+                    sendSignal({
+                        type: 'ice-candidate',
+                        candidate: event.candidate,
+                        roomId: roomId
                     });
-            });
+                }
+            };
             
-            testPeer.on('error', (err) => {
-                console.error('❌ فشل الاتصال بخادم PeerJS:', err.type, err.message);
-                testPeer.destroy();
-            });
+            peerConnection.oniceconnectionstatechange = () => {
+                console.log('حالة اتصال ICE:', peerConnection.iceConnectionState);
+                
+                if (peerConnection.iceConnectionState === 'connected' || 
+                    peerConnection.iceConnectionState === 'completed') {
+                    console.log('✅ تم إنشاء اتصال WebRTC بنجاح');
+                    
+                    if (connectionMode === 'broadcaster') {
+                        broadcastStatus.textContent = 'متصل';
+                        statsContainer.classList.remove('hidden');
+                    } else if (connectionMode === 'viewer') {
+                        viewerStatus.textContent = 'متصل';
+                        connectingOverlay.classList.add('hidden');
+                        disconnectButton.disabled = false;
+                        viewerZoomControls.classList.remove('hidden');
+                    }
+                } else if (peerConnection.iceConnectionState === 'disconnected' || 
+                           peerConnection.iceConnectionState === 'failed' || 
+                           peerConnection.iceConnectionState === 'closed') {
+                    console.log('❌ انقطع اتصال WebRTC');
+                    
+                    if (connectionMode === 'broadcaster') {
+                        broadcastStatus.textContent = 'غير متصل';
+                    } else if (connectionMode === 'viewer') {
+                        viewerStatus.textContent = 'غير متصل';
+                        disconnectButton.disabled = true;
+                        viewerZoomControls.classList.add('hidden');
+                        showReconnectOverlay();
+                    }
+                }
+            };
+            
+            // للمشاهد: استقبال الوسائط
+            if (connectionMode === 'viewer') {
+                peerConnection.ontrack = (event) => {
+                    console.log('تم استقبال مسار وسائط:', event.track.kind);
+                    
+                    if (!remoteVideoElement.srcObject) {
+                        remoteVideoElement.srcObject = new MediaStream();
+                    }
+                    
+                    remoteVideoElement.srcObject.addTrack(event.track);
+                    
+                    // تأكد من تشغيل الفيديو
+                    remoteVideoElement.play().catch(err => {
+                        console.warn('لم يتم تشغيل الفيديو تلقائيًا:', err);
+                    });
+                    
+                    // إخفاء overlay الاتصال
+                    connectingOverlay.classList.add('hidden');
+                    
+                    // تحديث جودة الاتصال
+                    updateConnectionQuality('جيدة');
+                    
+                    // تمكين أزرار التحكم
+                    disconnectButton.disabled = false;
+                    viewerZoomControls.classList.remove('hidden');
+                };
+            }
+            
+            // للباث: إضافة المسارات إلى الاتصال
+            if (connectionMode === 'broadcaster' && stream) {
+                stream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, stream);
+                    console.log('تمت إضافة مسار للبث:', track.kind);
+                });
+            }
+            
+            // تسجيل اتصال البيانات
+            const dataChannel = peerConnection.createDataChannel('stats', { negotiated: true, id: 0 });
+            
+            dataChannel.onopen = () => {
+                console.log('تم فتح قناة البيانات');
+                
+                // إرسال معلومات دورية للمشاهدين
+                if (connectionMode === 'broadcaster') {
+                    setInterval(() => {
+                        if (dataChannel.readyState === 'open') {
+                            dataChannel.send(JSON.stringify({ 
+                                type: 'stats', 
+                                timestamp: Date.now(),
+                                viewerCount: viewerCount 
+                            }));
+                        }
+                    }, 2000);
+                }
+            };
+            
+            dataChannel.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'stats' && connectionMode === 'viewer') {
+                        // تحديث إحصائيات المشاهدة
+                        updateViewerStats(data);
+                    }
+                } catch (err) {
+                    console.error('خطأ في معالجة بيانات الإحصائيات:', err);
+                }
+            };
+            
+            return peerConnection;
         }
         
-        // إدارة حالة الميكروفون
-        function updateMicrophoneState() {
-            if (!audioTrack) return;
+        // إغلاق اتصال WebRTC
+        function closePeerConnection() {
+            if (peerConnection) {
+                peerConnection.close();
+                peerConnection = null;
+                console.log('تم إغلاق اتصال WebRTC');
+            }
             
-            // تحديث حالة الميكروفون استنادًا إلى الزر التبديلي
-            audioTrack.enabled = !isMicMuted;
-            console.log('تم تحديث حالة الميكروفون:', isMicMuted ? 'مكتوم' : 'قيد التشغيل');
+            // إعادة تعيين فيديو المشاهدة
+            if (remoteVideoElement.srcObject) {
+                remoteVideoElement.srcObject.getTracks().forEach(track => track.stop());
+                remoteVideoElement.srcObject = null;
+            }
+        }
+        
+        // فتح اتصال WebSocket
+        function connectToSignalServer() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                return;
+            }
+            
+            console.log('الاتصال بخادم الإشارات...');
+            
+            try {
+                socket = new WebSocket(WS_SERVER);
+                
+                socket.onopen = () => {
+                    console.log('✅ تم الاتصال بخادم الإشارات');
+                };
+                
+                socket.onmessage = (event) => {
+                    try {
+                        const signal = JSON.parse(event.data);
+                        handleSignalMessage(signal);
+                    } catch (err) {
+                        console.error('خطأ في معالجة رسالة الإشارة:', err);
+                    }
+                };
+                
+                socket.onerror = (error) => {
+                    console.error('خطأ في اتصال WebSocket:', error);
+                };
+                
+                socket.onclose = () => {
+                    console.log('تم إغلاق اتصال WebSocket');
+                };
+            } catch (err) {
+                console.error('فشل في الاتصال بخادم الإشارات:', err);
+            }
+        }
+        
+        // إرسال إشارة عبر WebSocket
+        function sendSignal(data) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify(data));
+            } else {
+                console.error('محاولة إرسال إشارة بدون اتصال مفتوح!');
+                
+                // محاولة إعادة فتح الاتصال وإعادة المحاولة
+                connectToSignalServer();
+                setTimeout(() => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify(data));
+                    }
+                }, 1000);
+            }
+        }
+        
+        // معالجة رسائل الإشارة
+        function handleSignalMessage(signal) {
+            if (!signal || !signal.type || !signal.roomId) {
+                return;
+            }
+            
+            // تجاهل الرسائل لغرف أخرى
+            if (signal.roomId !== roomId) {
+                return;
+            }
+            
+            console.log('استلام إشارة:', signal.type);
+            
+            switch (signal.type) {
+                case 'offer':
+                    if (connectionMode === 'viewer' && signal.offer) {
+                        handleOffer(signal.offer);
+                    }
+                    break;
+                    
+                case 'answer':
+                    if (connectionMode === 'broadcaster' && signal.answer) {
+                        handleAnswer(signal.answer);
+                    }
+                    break;
+                    
+                case 'ice-candidate':
+                    if (signal.candidate) {
+                        handleIceCandidate(signal.candidate);
+                    }
+                    break;
+                    
+                case 'viewer-connected':
+                    if (connectionMode === 'broadcaster') {
+                        viewerCount++;
+                        viewerCountDisplay.textContent = viewerCount;
+                        console.log('مشاهد جديد متصل. إجمالي المشاهدين:', viewerCount);
+                    }
+                    break;
+                    
+                case 'viewer-disconnected':
+                    if (connectionMode === 'broadcaster' && viewerCount > 0) {
+                        viewerCount--;
+                        viewerCountDisplay.textContent = viewerCount;
+                        console.log('انقطع اتصال مشاهد. إجمالي المشاهدين:', viewerCount);
+                    }
+                    break;
+                    
+                case 'broadcaster-disconnected':
+                    if (connectionMode === 'viewer') {
+                        showReconnectOverlay();
+                    }
+                    break;
+            }
+        }
+        
+        // معالجة عرض SDP
+        async function handleOffer(offer) {
+            if (!peerConnection) {
+                createPeerConnection();
+            }
+            
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                console.log('تم تعيين الوصف البعيد (العرض)');
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                console.log('تم إنشاء الإجابة وتعيين الوصف المحلي');
+                
+                sendSignal({
+                    type: 'answer',
+                    answer: peerConnection.localDescription,
+                    roomId: roomId
+                });
+                
+                // إعلام الباث بالاتصال
+                sendSignal({
+                    type: 'viewer-connected',
+                    roomId: roomId
+                });
+                
+                viewerStatus.textContent = 'متصل';
+            } catch (err) {
+                console.error('خطأ في معالجة العرض:', err);
+                showReconnectOverlay();
+            }
+        }
+        
+        // معالجة إجابة SDP
+        async function handleAnswer(answer) {
+            if (!peerConnection) {
+                console.error('لا يمكن معالجة الإجابة: لا يوجد اتصال WebRTC');
+                return;
+            }
+            
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('تم تعيين الوصف البعيد (الإجابة)');
+            } catch (err) {
+                console.error('خطأ في معالجة الإجابة:', err);
+            }
+        }
+        
+        // معالجة مرشح ICE
+        async function handleIceCandidate(candidate) {
+            if (!peerConnection) {
+                console.error('لا يمكن معالجة مرشح ICE: لا يوجد اتصال WebRTC');
+                return;
+            }
+            
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log('تمت إضافة مرشح ICE');
+            } catch (err) {
+                console.error('خطأ في إضافة مرشح ICE:', err);
+            }
+        }
+        
+        // تحديث إحصائيات المشاهدة
+        function updateViewerStats(data) {
+            if (data.viewerCount !== undefined) {
+                // تحديث عدد المشاهدين (إذا كان متاحًا في المستقبل)
+            }
+            
+            // حساب وقت الاستجابة
+            const latency = Date.now() - data.timestamp;
+            
+            // تحديث جودة الاتصال
+            if (latency < 200) {
+                updateConnectionQuality('ممتازة');
+            } else if (latency < 500) {
+                updateConnectionQuality('جيدة');
+            } else if (latency < 1000) {
+                updateConnectionQuality('متوسطة');
+            } else {
+                updateConnectionQuality('ضعيفة');
+            }
+        }
+        
+        // تحديث مؤشر جودة الاتصال
+        function updateConnectionQuality(quality) {
+            connectionQuality.querySelector('span').textContent = quality;
+            
+            // إزالة جميع الألوان
+            connectionQuality.querySelector('span').classList.remove(
+                'text-green-500', 'text-yellow-500', 'text-orange-500', 'text-red-500'
+            );
+            
+            // إضافة اللون المناسب
+            switch (quality) {
+                case 'ممتازة':
+                    connectionQuality.querySelector('span').classList.add('text-green-500');
+                    break;
+                case 'جيدة':
+                    connectionQuality.querySelector('span').classList.add('text-green-500');
+                    break;
+                case 'متوسطة':
+                    connectionQuality.querySelector('span').classList.add('text-yellow-500');
+                    break;
+                case 'ضعيفة':
+                    connectionQuality.querySelector('span').classList.add('text-red-500');
+                    break;
+                default:
+                    connectionQuality.querySelector('span').classList.add('text-gray-500');
+            }
+        }
+        
+        // إظهار شاشة إعادة الاتصال
+        function showReconnectOverlay() {
+            if (connectionMode !== 'viewer') return;
+            
+            noStreamOverlay.classList.remove('hidden');
+            connectingOverlay.classList.add('hidden');
+            viewerStatus.textContent = 'غير متصل';
+            disconnectButton.disabled = true;
+            viewerZoomControls.classList.add('hidden');
+            updateConnectionQuality('-');
         }
         
         // بدء تشغيل الكاميرا
@@ -896,6 +1044,7 @@
                 }
                 
                 hideError();
+                broadcastStatus.textContent = 'جاري الإعداد';
                 
                 console.log('جاري طلب الوصول إلى الكاميرا والميكروفون...');
                 
@@ -951,10 +1100,10 @@
                 // منع إغلاق الشاشة
                 preventSleep();
                 
-                console.log('بدء البث تلقائيًا...');
+                console.log('بدء البث...');
                 
-                // بدء البث تلقائيًا
-                startBroadcast();
+                // بدء البث
+                startBroadcasting();
                 
             } catch (error) {
                 console.error('خطأ في الوصول إلى الكاميرا:', error);
@@ -980,10 +1129,8 @@
         function stopCamera() {
             console.log('إيقاف الكاميرا...');
             
-            // إيقاف البث إذا كان قيد التشغيل
-            if (peer && appMode === 'broadcast') {
-                stopBroadcast();
-            }
+            // إيقاف البث
+            stopBroadcasting();
             
             if (stream) {
                 // إيقاف جميع المسارات
@@ -1007,7 +1154,6 @@
                 startButton.disabled = false;
                 stopButton.disabled = true;
                 switchCameraButton.disabled = true;
-                updateStatus(false);
                 
                 // إعادة تعيين مستوى التكبير
                 currentZoom = 1.0;
@@ -1024,562 +1170,208 @@
             
             facingMode = facingMode === 'user' ? 'environment' : 'user';
             if (stream) {
-                // تخزين معرف البث الحالي
-                const currentPeerId = peer ? peer.id : null;
+                // حفظ معرف الغرفة الحالي
+                const currentRoomId = roomId;
                 
                 // إيقاف البث الحالي
-                if (peer && appMode === 'broadcast') {
-                    stopBroadcast();
-                }
+                stopBroadcasting();
                 
                 // إعادة تشغيل الكاميرا مع الوضع الجديد
                 startCamera().then(() => {
-                    // إعادة استخدام نفس معرف البث إذا كان موجودًا
-                    if (currentPeerId) {
-                        broadcastIdInput.value = currentPeerId;
-                    }
+                    // استخدام نفس معرف الغرفة
+                    roomId = currentRoomId;
+                    
+                    // تحديث الرابط
+                    updateBroadcastLink();
                 });
             }
         }
         
+        // إنشاء وتحديث رابط البث
+        function updateBroadcastLink() {
+            // إنشاء رابط كامل للبث
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('room', roomId);
+            
+            // تحديث حقل الرابط
+            broadcastLink.value = currentUrl.toString();
+            
+            // إنشاء QR Code
+            generateQRCode(currentUrl.toString());
+            
+            // إظهار حاوية الرابط
+            broadcastIdContainer.classList.remove('hidden');
+        }
+        
         // بدء البث
-        function startBroadcast(customId = null) {
-            if (!stream) {
-                showError('يجب تشغيل الكاميرا أولاً قبل بدء البث');
-                return;
-            }
+        async function startBroadcasting() {
+            // تعيين وضع الاتصال
+            connectionMode = 'broadcaster';
+            
+            // إنشاء معرف غرفة جديد
+            roomId = generateRoomId();
+            console.log('معرف الغرفة الجديد:', roomId);
+            
+            // تحديث رابط البث
+            updateBroadcastLink();
+            
+            // الاتصال بخادم الإشارات
+            connectToSignalServer();
+            
+            // إنشاء اتصال WebRTC
+            createPeerConnection();
             
             try {
-                // إنشاء معرف للبث (استخدام المعرف المخصص إذا تم توفيره)
-                const id = customId || generateBroadcastId();
-                lastPeerId = id; // تخزين المعرف لإعادة الاتصال
-                
-                console.log('جاري إنشاء بث جديد بمعرف:', id);
-                
-                // إنشاء اتصال Peer جديد مع خوادم ICE المحسنة
-                peer = new Peer(id, PEER_CONFIG);
-                
-                // إيقاف أي عملية إعادة اتصال سابقة
-                stopReconnection();
-                
-                // رسالة تحميل أثناء الاتصال
-                statusText.textContent = 'جاري الاتصال...';
-                
-                // عند فتح الاتصال
-                peer.on('open', (id) => {
-                    console.log('تم فتح اتصال البث بمعرف:', id);
-                    broadcastIdInput.value = id;
-                    broadcastIdContainer.classList.remove('hidden');
-                    updateStatus(true);
-                    updateViewerCount();
-                    updateSignalStrength(4); // افتراض قوة إشارة جيدة في البداية
+                // إنشاء عرض
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: false,
+                    offerToReceiveVideo: false
                 });
                 
-                // عند استقبال طلب اتصال من مشاهد
-                peer.on('connection', (conn) => {
-                    console.log('اتصال بيانات جديد من:', conn.peer);
-                    
-                    connections.set(conn.peer, conn);
-                    
-                    // عند فتح الاتصال مع المشاهد
-                    conn.on('open', () => {
-                        console.log('تم فتح اتصال البيانات مع المشاهد:', conn.peer);
-                        // إرسال إشعار للمشاهد
-                        conn.send({
-                            type: 'info',
-                            message: 'تم الاتصال بالبث بنجاح'
+                await peerConnection.setLocalDescription(offer);
+                console.log('تم إنشاء العرض وتعيين الوصف المحلي');
+                
+                // إرسال العرض للمشاهدين المحتملين
+                sendSignal({
+                    type: 'offer',
+                    offer: peerConnection.localDescription,
+                    roomId: roomId
+                });
+                
+                // إعادة إرسال العرض دوريًا للمشاهدين الجدد
+                setInterval(() => {
+                    if (peerConnection && peerConnection.localDescription) {
+                        sendSignal({
+                            type: 'offer',
+                            offer: peerConnection.localDescription,
+                            roomId: roomId
                         });
-                        
-                        // زيادة عدد المشاهدين
-                        currentViewers++;
-                        updateViewerCount();
-                    });
-                    
-                    // عند إغلاق الاتصال مع المشاهد
-                    conn.on('close', () => {
-                        console.log('تم إغلاق اتصال البيانات مع المشاهد:', conn.peer);
-                        connections.delete(conn.peer);
-                        
-                        // تقليل عدد المشاهدين
-                        currentViewers = Math.max(0, currentViewers - 1);
-                        updateViewerCount();
-                    });
-                    
-                    // عند استقبال بيانات من المشاهد
-                    conn.on('data', (data) => {
-                        if (data.type === 'ping') {
-                            // ترجيع قيمة ping مع الوقت الحالي
-                            conn.send({
-                                type: 'pong',
-                                timestamp: Date.now()
-                            });
-                        }
-                    });
-                });
-                
-                // استقبال مكالمة من مشاهد
-                peer.on('call', (call) => {
-                    console.log('استقبال مكالمة فيديو من:', call.peer);
-                    
-                    // تخزين المكالمة للاستخدام لاحقاً
-                    callConnections.add(call);
-                    
-                    // الرد على المكالمة مع تدفق الكاميرا المحلية
-                    call.answer(stream);
-                    console.log('تم الرد على المكالمة وإرسال تدفق الكاميرا');
-                    
-                    // عند انتهاء المكالمة
-                    call.on('close', () => {
-                        console.log('تم إغلاق المكالمة من:', call.peer);
-                        callConnections.delete(call);
-                    });
-                    
-                    // عند حدوث خطأ في المكالمة
-                    call.on('error', (err) => {
-                        console.error('خطأ في المكالمة:', err);
-                        callConnections.delete(call);
-                    });
-                });
-                
-                // معالجة الأخطاء
-                peer.on('error', (err) => {
-                    console.error('خطأ في اتصال البث:', err.type, err.message);
-                    
-                    if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
-                        // بدء محاولة إعادة الاتصال
-                        updateSignalStrength(0);
-                        startReconnection(false);
-                    } else if (err.type === 'unavailable-id') {
-                        // إذا كان المعرف مستخدمًا بالفعل، نحاول بمعرف جديد
-                        console.log('المعرف مستخدم بالفعل، جاري إنشاء معرف جديد...');
-                        startBroadcast(); // إنشاء معرف جديد
-                    } else {
-                        showError('خطأ في اتصال البث: ' + err.message);
                     }
-                });
+                }, 5000);
                 
-                // عند قطع الاتصال
-                peer.on('disconnected', () => {
-                    console.log('تم قطع الاتصال مع الخادم');
-                    updateSignalStrength(0);
-                    
-                    // محاولة إعادة الاتصال تلقائيًا
-                    console.log('محاولة إعادة الاتصال تلقائيًا');
-                    peer.reconnect();
-                    
-                    // بدء عد تنازلي لإعادة الاتصال إذا فشلت محاولة إعادة الاتصال التلقائية
-                    setTimeout(() => {
-                        if (peer && !peer.open) {
-                            console.log('فشلت محاولة إعادة الاتصال التلقائية، بدء عملية إعادة الاتصال المخصصة');
-                            startReconnection(false);
-                        }
-                    }, 5000);
-                });
+                // تحديث حالة البث
+                broadcastStatus.textContent = 'جاهز للاتصال';
+                statsContainer.classList.remove('hidden');
                 
-            } catch (error) {
-                console.error('خطأ في بدء البث:', error);
-                showError('خطأ في بدء البث: ' + error.message);
+            } catch (err) {
+                console.error('خطأ في بدء البث:', err);
+                broadcastStatus.textContent = 'فشل الإعداد';
             }
         }
         
         // إيقاف البث
-        function stopBroadcast() {
+        function stopBroadcasting() {
             console.log('إيقاف البث...');
             
-            // إيقاف محاولات إعادة الاتصال
-            stopReconnection();
-            
-            if (peer) {
-                // إغلاق جميع الاتصالات مع المشاهدين
-                connections.forEach((conn) => {
-                    conn.close();
+            // إرسال إشعار بانقطاع الاتصال
+            if (socket && socket.readyState === WebSocket.OPEN && roomId) {
+                sendSignal({
+                    type: 'broadcaster-disconnected',
+                    roomId: roomId
                 });
-                connections.clear();
-                
-                // إغلاق جميع اتصالات المكالمات
-                callConnections.forEach((call) => {
-                    call.close();
-                });
-                callConnections.clear();
-                
-                // إغلاق اتصال البث
-                peer.destroy();
-                peer = null;
-                lastPeerId = null;
-                
-                // إعادة تعيين حالة البث
-                broadcastIdContainer.classList.add('hidden');
-                broadcastIdInput.value = '';
-                currentViewers = 0;
-                updateViewerCount();
-                updateStatus(false);
-                
-                console.log('تم إيقاف البث بنجاح');
             }
+            
+            // إغلاق اتصال WebRTC
+            closePeerConnection();
+            
+            // إخفاء حاوية الرابط
+            broadcastIdContainer.classList.add('hidden');
+            statsContainer.classList.add('hidden');
+            
+            // إعادة تعيين المتغيرات
+            connectionMode = '';
+            roomId = null;
+            viewerCount = 0;
+            
+            console.log('تم إيقاف البث بنجاح');
         }
         
-        // الاتصال ببث موجود
-        function connectToBroadcast(isReconnect = false) {
-            const broadcastId = connectIdInput.value.trim().toUpperCase();
+        // بدء اتصال المشاهدة
+        function startViewerConnection(targetRoomId) {
+            if (isConnecting) return;
+            isConnecting = true;
             
-            if (!broadcastId) {
-                showViewerError('يرجى إدخال رمز البث');
-                return;
-            }
+            console.log('بدء اتصال المشاهدة للغرفة:', targetRoomId);
             
-            try {
-                // إيقاف محاولات إعادة الاتصال السابقة
-                if (!isReconnect) {
-                    stopReconnection();
-                    connectionAttempts = 0;
-                }
-                
-                // إظهار overlay التحميل إذا لم نكن في وضع إعادة الاتصال
-                if (!isReconnect) {
-                    noStreamOverlay.classList.add('hidden');
-                    connectingOverlay.classList.remove('hidden');
-                    connectingStep.textContent = '1';
-                    console.log('محاولة الاتصال بالبث ذو المعرف:', broadcastId);
-                }
-                
-                // إغلاق الاتصال السابق
-                if (peer && !isReconnect) {
-                    peer.destroy();
-                    peer = null;
-                }
-                
-                // إغلاق اتصال الفيديو الحالي إذا كان موجودًا
-                if (remoteVideoElement.srcObject) {
-                    const tracks = remoteVideoElement.srcObject.getTracks();
-                    tracks.forEach(track => track.stop());
-                    remoteVideoElement.srcObject = null;
-                }
-                
-                // زيادة عدد محاولات الاتصال
-                connectionAttempts++;
-                
-                // تحديث خطوة الاتصال
-                if (!isReconnect) {
+            // تعيين معرف الغرفة
+            roomId = targetRoomId;
+            
+            // تعيين وضع الاتصال
+            connectionMode = 'viewer';
+            
+            // إظهار شاشة الاتصال
+            noStreamOverlay.classList.add('hidden');
+            connectingOverlay.classList.remove('hidden');
+            connectingStatus.textContent = 'جاري الاتصال بالبث...';
+            
+            // الاتصال بخادم الإشارات
+            connectToSignalServer();
+            
+            // إنشاء اتصال WebRTC
+            createPeerConnection();
+            
+            // إعلام الباث بطلب الاتصال
+            sendSignal({
+                type: 'viewer-connect-request',
+                roomId: roomId
+            });
+            
+            // تعيين مهلة للاتصال
+            setTimeout(() => {
+                if (peerConnection && 
+                    (peerConnection.iceConnectionState === 'new' || 
+                     peerConnection.iceConnectionState === 'checking')) {
+                    
+                    console.log('انتهت مهلة الاتصال - جاري إعادة المحاولة...');
+                    
+                    // إعادة طلب العرض
+                    sendSignal({
+                        type: 'offer-request',
+                        roomId: roomId
+                    });
+                    
+                    // تحديث حالة الاتصال
+                    connectingStatus.textContent = 'محاولة إعادة الاتصال...';
+                    
+                    // إعادة المحاولة بعد 10 ثوانٍ إضافية إذا لم ينجح الاتصال
                     setTimeout(() => {
-                        connectingStep.textContent = '2';
-                    }, 1000);
+                        if (peerConnection && 
+                            (peerConnection.iceConnectionState !== 'connected' && 
+                             peerConnection.iceConnectionState !== 'completed')) {
+                            
+                            console.log('فشل الاتصال بعد المحاولات');
+                            showReconnectOverlay();
+                            isConnecting = false;
+                        }
+                    }, 10000);
                 }
-                
-                // إنشاء اتصال Peer جديد للمشاهد
-                if (!peer) {
-                    console.log('إنشاء peer جديد للمشاهد...');
-                    peer = new Peer(null, PEER_CONFIG);
-                }
-                
-                // رسالة تحميل أثناء الاتصال
-                if (!isReconnect) {
-                    viewerStatusText.textContent = 'جاري الاتصال...';
-                }
-                
-                // عند الاتصال بخادم PeerJS
-                peer.on('open', (id) => {
-                    console.log('تم فتح اتصال المشاهد بمعرف:', id);
-                    
-                    // تحديث خطوة الاتصال
-                    if (!isReconnect) {
-                        connectingStep.textContent = '3';
-                    }
-                    
-                    // إنشاء اتصال بيانات مع البث
-                    if (remoteConnection) {
-                        remoteConnection.close();
-                    }
-                    
-                    console.log('محاولة الاتصال بالبث...');
-                    
-                    remoteConnection = peer.connect(broadcastId, {
-                        reliable: true,
-                        serialization: 'json'
-                    });
-                    
-                    // زمن انتهاء المهلة للاتصال
-                    const connectionTimeout = setTimeout(() => {
-                        if (connectionAttempts < 3) {
-                            console.log('انتهت مهلة الاتصال، إعادة المحاولة...');
-                            // إعادة المحاولة
-                            if (peer) {
-                                peer.destroy();
-                                peer = null;
-                            }
-                            connectToBroadcast(false);
-                        } else {
-                            // فشل بعد 3 محاولات
-                            console.log('فشل الاتصال بعد 3 محاولات');
-                            showViewerError('تعذر الاتصال بالبث. يرجى التأكد من رمز البث وأن البث مازال نشطًا.');
-                            disconnectFromBroadcast();
-                        }
-                    }, 10000); // 10 ثوانٍ
-                    
-                    // عند فتح الاتصال مع البث
-                    remoteConnection.on('open', () => {
-                        clearTimeout(connectionTimeout);
-                        console.log('تم فتح اتصال البيانات مع البث:', broadcastId);
-                        
-                        // إيقاف محاولات إعادة الاتصال
-                        stopReconnection();
-                        
-                        // تأسيس اتصال ping للتحقق من جودة الاتصال
-                        setInterval(() => {
-                            if (remoteConnection && remoteConnection.open) {
-                                const startTime = Date.now();
-                                remoteConnection.send({
-                                    type: 'ping',
-                                    timestamp: startTime
-                                });
-                                
-                                // تخفيض قوة الإشارة بعد فترة بدون استجابة
-                                setTimeout(() => {
-                                    if (signalStrength > 0) {
-                                        updateSignalStrength(signalStrength - 1, true);
-                                    }
-                                }, 2000);
-                            }
-                        }, 5000);
-                        
-                        // عند استقبال بيانات
-                        remoteConnection.on('data', (data) => {
-                            if (data.type === 'pong') {
-                                // حساب زمن الاستجابة
-                                const pingTime = Date.now() - data.timestamp;
-                                console.log('Ping: ' + pingTime + 'ms');
-                                
-                                // تحديث قوة الإشارة بناءً على زمن الاستجابة
-                                let strength = 4;
-                                if (pingTime > 1000) strength = 1;
-                                else if (pingTime > 500) strength = 2;
-                                else if (pingTime > 200) strength = 3;
-                                
-                                updateSignalStrength(strength, true);
-                            }
-                        });
-                        
-                        console.log('طلب تدفق الفيديو من البث...');
-                        
-                        // طلب تدفق الفيديو
-                        // إنشاء تدفق فارغ لإرساله في المكالمة (مطلوب ببعض المتصفحات)
-                        const emptyStream = new MediaStream();
-                        
-                        // طلب تدفق الفيديو
-                        const call = peer.call(broadcastId, emptyStream);
-                        
-                        console.log('تم إرسال طلب الاتصال بالفيديو');
-                        
-                        // تحديد زمن انتهاء المهلة للفيديو
-                        const videoTimeout = setTimeout(() => {
-                            if (!remoteVideoElement.srcObject) {
-                                console.log('انتهت مهلة استقبال الفيديو');
-                                showViewerError('تعذر استقبال فيديو البث. حاول مرة أخرى.');
-                                disconnectFromBroadcast();
-                            }
-                        }, 15000); // 15 ثانية
-                        
-                        // عند استقبال تدفق الفيديو
-                        call.on('stream', (remoteStream) => {
-                            clearTimeout(videoTimeout);
-                            console.log('تم استقبال تدفق الفيديو!');
-                            
-                            // تأكد من أن التدفق يحتوي على مسارات صالحة
-                            const videoTracks = remoteStream.getVideoTracks();
-                            const audioTracks = remoteStream.getAudioTracks();
-                            
-                            console.log('مسارات الفيديو المستلمة:', videoTracks.length);
-                            console.log('مسارات الصوت المستلمة:', audioTracks.length);
-                            
-                            // عرض الفيديو
-                            remoteVideoElement.srcObject = remoteStream;
-                            
-                            // منع النوم
-                            preventSleep();
-                            
-                            // إعادة تعيين مستوى التكبير للمشاهد
-                            viewerZoom = 1.0;
-                            setViewerZoom(viewerZoom);
-                            
-                            // إخفاء overlay وتحديث الحالة
-                            connectingOverlay.classList.add('hidden');
-                            updateViewerStatus(true);
-                            disconnectButton.disabled = false;
-                            connectButton.disabled = true;
-                            updateSignalStrength(4, true);
-                            
-                            // إعادة تعيين عدد محاولات الاتصال
-                            connectionAttempts = 0;
-                            
-                            // تشغيل الفيديو للتأكد من عرضه
-                            remoteVideoElement.play().catch(err => {
-                                console.warn('لم يتم تشغيل الفيديو تلقائيًا:', err);
-                            });
-                        });
-                        
-                        // معالجة انتهاء المكالمة
-                        call.on('close', () => {
-                            console.log('تم إغلاق المكالمة');
-                            clearTimeout(videoTimeout);
-                            if (!isReconnecting) {
-                                startReconnection(true);
-                            }
-                        });
-                        
-                        // معالجة خطأ المكالمة
-                        call.on('error', (err) => {
-                            console.log('خطأ في المكالمة:', err);
-                            clearTimeout(videoTimeout);
-                            
-                            if (isReconnect) {
-                                // لا نظهر رسالة خطأ في حالة إعادة الاتصال التلقائية
-                                updateSignalStrength(0, true);
-                            } else {
-                                showViewerError('خطأ في الاتصال: ' + err.message);
-                                disconnectFromBroadcast();
-                            }
-                        });
-                    });
-                    
-                    // معالجة انتهاء الاتصال
-                    remoteConnection.on('close', () => {
-                        console.log('تم إغلاق الاتصال مع البث');
-                        clearTimeout(connectionTimeout);
-                        
-                        if (!isReconnecting) {
-                            startReconnection(true);
-                        }
-                    });
-                    
-                    // معالجة خطأ الاتصال
-                    remoteConnection.on('error', (err) => {
-                        console.log('خطأ في اتصال البيانات مع البث:', err);
-                        clearTimeout(connectionTimeout);
-                        
-                        if (isReconnect) {
-                            updateSignalStrength(0, true);
-                        } else {
-                            showViewerError('خطأ في الاتصال: ' + (err.message || 'خطأ غير معروف'));
-                            disconnectFromBroadcast();
-                        }
-                    });
-                });
-                
-                // معالجة الأخطاء
-                peer.on('error', (err) => {
-                    console.log('خطأ في اتصال المشاهد:', err.type, err.message);
-                    
-                    if (err.type === 'peer-unavailable') {
-                        if (isReconnect) {
-                            // لا نظهر رسالة خطأ في حالة إعادة الاتصال التلقائية
-                            updateSignalStrength(0, true);
-                        } else {
-                            showViewerError('رمز البث غير موجود أو غير متصل');
-                            disconnectFromBroadcast();
-                        }
-                    } else if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
-                        // بدء محاولة إعادة الاتصال
-                        updateSignalStrength(0, true);
-                        if (!isReconnecting) {
-                            startReconnection(true);
-                        }
-                    } else {
-                        if (!isReconnect) {
-                            showViewerError('خطأ في الاتصال: ' + (err.message || 'خطأ غير معروف'));
-                            disconnectFromBroadcast();
-                        }
-                    }
-                });
-                
-                // عند قطع الاتصال
-                peer.on('disconnected', () => {
-                    console.log('تم قطع الاتصال مع الخادم');
-                    updateSignalStrength(0, true);
-                    
-                    // محاولة إعادة الاتصال تلقائيًا
-                    peer.reconnect();
-                    
-                    setTimeout(() => {
-                        if (peer && !peer.open && !isReconnecting) {
-                            startReconnection(true);
-                        }
-                    }, 5000);
-                });
-                
-            } catch (error) {
-                console.log('خطأ في الاتصال بالبث:', error);
-                
-                if (!isReconnect) {
-                    showViewerError('خطأ في الاتصال: ' + error.message);
-                    disconnectFromBroadcast();
-                }
-            }
+            }, 10000);
         }
         
-        // قطع الاتصال بالبث
-        function disconnectFromBroadcast() {
-            console.log('قطع الاتصال بالبث...');
+        // قطع اتصال المشاهدة
+        function disconnectViewer() {
+            console.log('قطع اتصال المشاهدة...');
             
-            // إيقاف محاولات إعادة الاتصال
-            stopReconnection();
-            
-            // إيقاف الفيديو
-            if (remoteVideoElement.srcObject) {
-                const tracks = remoteVideoElement.srcObject.getTracks();
-                tracks.forEach(track => track.stop());
-                remoteVideoElement.srcObject = null;
-            }
-            
-            // إغلاق الاتصال
-            if (remoteConnection) {
-                remoteConnection.close();
-                remoteConnection = null;
-            }
-            
-            // إغلاق اتصال Peer
-            if (peer && appMode === 'viewer') {
-                peer.destroy();
-                peer = null;
-            }
-            
-            // إخفاء عناصر التكبير/التصغير للمشاهد
-            viewerZoomControls.classList.add('hidden');
-            
-            // إعادة تعيين الواجهة
-            noStreamOverlay.classList.remove('hidden');
-            connectingOverlay.classList.add('hidden');
-            disconnectButton.disabled = true;
-            connectButton.disabled = false;
-            updateViewerStatus(false);
-            
-            // إعادة تعيين مستوى التكبير للمشاهد
-            viewerZoom = 1.0;
-            remoteVideoWrapper.style.transform = `scale(${viewerZoom})`;
-            viewerZoomLevel.textContent = `${viewerZoom.toFixed(1)}x`;
-            
-            // إعادة تعيين عدد محاولات الاتصال
-            connectionAttempts = 0;
-            
-            console.log('تم قطع الاتصال بنجاح');
-        }
-        
-        // نسخ رمز البث إلى الحافظة
-        function copyBroadcastId() {
-            const id = broadcastIdInput.value;
-            if (id) {
-                navigator.clipboard.writeText(id).then(() => {
-                    // نجاح النسخ
-                    const originalText = copyIdButton.innerHTML;
-                    copyIdButton.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" /></svg>';
-                    
-                    setTimeout(() => {
-                        copyIdButton.innerHTML = originalText;
-                    }, 2000);
-                    
-                    console.log('تم نسخ رمز البث:', id);
-                }).catch(err => {
-                    console.error('فشل نسخ الرمز:', err);
+            // إرسال إشعار بانقطاع الاتصال
+            if (socket && socket.readyState === WebSocket.OPEN && roomId) {
+                sendSignal({
+                    type: 'viewer-disconnected',
+                    roomId: roomId
                 });
             }
+            
+            // إغلاق اتصال WebRTC
+            closePeerConnection();
+            
+            // إظهار شاشة اللاتصال
+            showReconnectOverlay();
+            
+            // إعادة تعيين المتغيرات
+            connectionMode = '';
+            roomId = null;
+            isConnecting = false;
+            
+            console.log('تم قطع اتصال المشاهدة بنجاح');
         }
         
         // منع iOS من التكبير عند النقر المزدوج
@@ -1608,28 +1400,13 @@
             }
         }
         
-        // تنسيق زر التبديل
-        function setupToggleButton() {
-            // تعيين الحالة المبدئية
-            updateMicToggleStyle();
-        }
-        
         // إضافة مستمعي الأحداث
         document.addEventListener('DOMContentLoaded', () => {
             console.log("تم تحميل الصفحة بالكامل!");
             
-            // ضبط أنماط زر تبديل الميكروفون
-            setupToggleButton();
-            
-            // اختبار الاتصال بخادم PeerJS وخوادم ICE
-            testServerConnection();
-
             // تبديل حالة الميكروفون
-            muteMicToggle.addEventListener('change', () => {
-                updateMicToggleStyle();
-                updateMicrophoneState();
-            });
-
+            muteMicToggle.addEventListener('change', updateMicToggleStyle);
+            
             // أزرار التبديل بين الأوضاع
             broadcastModeBtn.addEventListener('click', () => {
                 console.log("تم النقر على زر وضع البث");
@@ -1657,42 +1434,34 @@
                 switchCamera();
             });
             
-            copyIdButton.addEventListener('click', () => {
-                console.log("تم النقر على زر نسخ الرمز");
-                copyBroadcastId();
+            copyLinkButton.addEventListener('click', () => {
+                console.log("تم النقر على زر نسخ الرابط");
+                copyBroadcastLink();
             });
             
             // أزرار وضع المشاهدة
-            connectButton.addEventListener('click', () => {
-                console.log("تم النقر على زر الاتصال");
-                connectToBroadcast(false);
+            retryButton.addEventListener('click', () => {
+                console.log("تم النقر على زر إعادة المحاولة");
+                
+                // إعادة المحاولة إذا كان هناك معرف غرفة
+                if (roomId) {
+                    startViewerConnection(roomId);
+                } else {
+                    // التحقق من وجود معرف غرفة في الرابط
+                    checkUrlForRoomId();
+                }
             });
             
             disconnectButton.addEventListener('click', () => {
                 console.log("تم النقر على زر قطع الاتصال");
-                disconnectFromBroadcast();
+                disconnectViewer();
             });
             
             // أزرار التكبير/التصغير
-            zoomInBtn.addEventListener('click', () => {
-                console.log("تم النقر على زر التكبير");
-                zoomIn();
-            });
-            
-            zoomOutBtn.addEventListener('click', () => {
-                console.log("تم النقر على زر التصغير");
-                zoomOut();
-            });
-            
-            viewerZoomInBtn.addEventListener('click', () => {
-                console.log("تم النقر على زر تكبير المشاهد");
-                viewerZoomIn();
-            });
-            
-            viewerZoomOutBtn.addEventListener('click', () => {
-                console.log("تم النقر على زر تصغير المشاهد");
-                viewerZoomOut();
-            });
+            zoomInBtn.addEventListener('click', zoomIn);
+            zoomOutBtn.addEventListener('click', zoomOut);
+            viewerZoomInBtn.addEventListener('click', viewerZoomIn);
+            viewerZoomOutBtn.addEventListener('click', viewerZoomOut);
             
             // تطبيق دعم الآيفون
             applyTouchSupport();
@@ -1706,17 +1475,11 @@
             // إذا كان الجهاز iOS، نمنع إغلاق الشاشة
             preventSleep();
             
-            // تسهيل إدخال رمز البث
-            connectIdInput.addEventListener('input', function() {
-                this.value = this.value.toUpperCase();
-            });
+            // تطبيق حالة الميكروفون المبدئية
+            updateMicToggleStyle();
             
-            // التعامل مع الضغط على Enter في حقل إدخال رمز البث
-            connectIdInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') {
-                    connectToBroadcast(false);
-                }
-            });
+            // التحقق من وجود معرف غرفة في الرابط
+            checkUrlForRoomId();
         });
     </script>
 </body>
