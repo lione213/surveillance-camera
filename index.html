@@ -7,6 +7,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>كاميرا المراقبة - نسخة مصححة</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- استخدام إصدار محدد من PeerJS -->
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
     <script>
         tailwind.config = {
@@ -669,7 +670,7 @@
         // تكوين ICE للمساعدة في تجاوز NAT والجدران النارية
         const ICE_CONFIGURATION = {
             'iceServers': [
-                // STUN servers - تحسين الاتصال
+                // STUN servers
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
@@ -686,23 +687,6 @@
                     urls: 'turn:global.turn.twilio.com:3478?transport=tcp',
                     username: 'f4b4035eaa76f4a55de5f4351567653ee4ff6fa97b50b6b334fcc1be9c27212d',
                     credential: 'w1uxM55V9yVoqyVFjt+mxDBV0F87AUCemaYVQGxsPLw='
-                },
-                
-                // خوادم TURN من metered.ca
-                {
-                    urls: 'turn:a.relay.metered.ca:80',
-                    username: 'e7c7cb908cb158b46ecfb3d3',
-                    credential: 'P+A92s35w8IFXqMc'
-                },
-                {
-                    urls: 'turn:a.relay.metered.ca:443',
-                    username: 'e7c7cb908cb158b46ecfb3d3',
-                    credential: 'P+A92s35w8IFXqMc'
-                },
-                {
-                    urls: 'turn:a.relay.metered.ca:443?transport=tcp',
-                    username: 'e7c7cb908cb158b46ecfb3d3',
-                    credential: 'P+A92s35w8IFXqMc'
                 }
             ],
             iceCandidatePoolSize: 10
@@ -1080,19 +1064,7 @@
                 // إنشاء Peer جديد للبث بإعدادات متقدمة
                 broadcaster = new Peer(id, {
                     config: ICE_CONFIGURATION,
-                    debug: 2,
-                    // تحسين تبادل الوسائط
-                    sdpTransform: (sdp) => {
-                        // تعزيز جودة الفيديو في الـ SDP
-                        sdp = sdp.replace('a=group:BUNDLE audio video', 'a=group:BUNDLE video audio');
-                        
-                        // تحسين ترتيب المرشحات وإعطاء أولوية للاتصال المباشر
-                        if (sdp.includes('a=rtpmap:')) {
-                            sdp = sdp.replace(/a=rtpmap:(\d+) H264\/\d+/g, 'a=rtpmap:$1 H264/90000\r\na=rtcp-fb:$1 nack\r\na=rtcp-fb:$1 nack pli\r\na=rtcp-fb:$1 ccm fir');
-                        }
-                        
-                        return sdp;
-                    }
+                    debug: 2
                 });
                 
                 // عند فتح الاتصال
@@ -1222,30 +1194,7 @@
             }
         }
         
-        // وظيفة مساعدة لتسجيل معالجات أحداث اتصال الوسائط
-        function registerMediaConnectionHandlers(mediaConn) {
-            if (!mediaConn) return;
-            
-            mediaConn.on('close', () => {
-                addLog('تم إغلاق مكالمة الفيديو', true);
-                showViewerError('انقطع الاتصال بالبث');
-                disconnectViewer();
-            });
-            
-            mediaConn.on('error', (err) => {
-                addLog(`خطأ في مكالمة الفيديو: ${err}`, true);
-                showViewerError('خطأ في استقبال الفيديو');
-                
-                // لا تقم بقطع الاتصال مباشرة في حالة الخطأ، حاول إعادة الاتصال أولاً
-                setTimeout(() => {
-                    if (mediaConn === mediaConnection) {
-                        reloadVideoStream();
-                    }
-                }, 2000);
-            });
-        }
-        
-        // بدء المشاهدة - تم تبسيط هذه الوظيفة بشكل كبير
+        // بدء المشاهدة - نسخة أكثر بساطة وموثوقية
         function startViewing() {
             const broadcastId = connectIdInput.value.trim().toUpperCase();
             
@@ -1266,8 +1215,9 @@
             
             try {
                 // إنشاء Peer جديد بإعدادات بسيطة
-                viewer = new Peer({
-                    config: ICE_CONFIGURATION
+                viewer = new Peer(undefined, { // استخدام معرف تلقائي
+                    config: ICE_CONFIGURATION,
+                    debug: 2
                 });
                 
                 // معالجة الاتصال بالخادم
@@ -1288,23 +1238,37 @@
                             loadingIndicator.classList.remove('hidden');
                             connectingOverlay.classList.add('hidden');
                             
-                            // التأكد من وجود جسم في القائمة (workaround لبعض المتصفحات)
+                            // التأكد من وجود عنصر مغلف للفيديو البعيد
                             if (!document.getElementById('remote-video-wrapper')) {
-                                const remoteVideoParent = remoteVideo.parentNode;
                                 const wrapper = document.createElement('div');
                                 wrapper.id = 'remote-video-wrapper';
                                 wrapper.className = 'w-full h-full';
                                 wrapper.style.transform = 'scale(1)';
-                                remoteVideo.parentNode.replaceChild(wrapper, remoteVideo);
+                                
+                                const remoteVideoParent = remoteVideo.parentNode;
+                                remoteVideoParent.replaceChild(wrapper, remoteVideo);
                                 wrapper.appendChild(remoteVideo);
                             }
                             
-                            // إنشاء اتصال الفيديو (مبسط)
+                            // إنشاء اتصال الفيديو - إصلاح هنا
                             try {
                                 addLog(`بدء اتصال الفيديو مع البث: ${broadcastId}`, true);
-                                mediaConnection = viewer.call(broadcastId);
                                 
-                                // معالجة استقبال تدفق الفيديو
+                                // إنشاء تدفق وهمي بسيط لاستخدامه في المكالمة
+                                // هذا ضروري لبعض المتصفحات والإصدارات
+                                const dummyStream = new MediaStream();
+                                
+                                // إنشاء مكالمة باستخدام التدفق الوهمي
+                                // هذا يساعد في تجنب مشكلة undefined في call()
+                                const call = viewer.call(broadcastId, dummyStream);
+                                
+                                if (!call) {
+                                    throw new Error("فشل إنشاء مكالمة الفيديو - لم يتم إرجاع كائن المكالمة");
+                                }
+                                
+                                mediaConnection = call;
+                                
+                                // إضافة معالجات الأحداث لمكالمة الفيديو
                                 mediaConnection.on('stream', (stream) => {
                                     addLog(`تم استقبال تدفق من البث!`, true);
                                     
@@ -1352,7 +1316,6 @@
                                     });
                                 });
                                 
-                                // معالجة أخطاء اتصال الفيديو
                                 mediaConnection.on('close', () => {
                                     addLog(`تم إغلاق اتصال الفيديو من جانب البث`, true);
                                     showViewerError('انقطع الاتصال بالبث');
@@ -1472,7 +1435,16 @@
             // إنشاء مكالمة جديدة
             try {
                 const broadcastId = connectIdInput.value.trim().toUpperCase();
-                mediaConnection = viewer.call(broadcastId);
+                
+                // إنشاء تدفق وهمي بسيط
+                const dummyStream = new MediaStream();
+                
+                // استخدام التدفق الوهمي لإنشاء المكالمة
+                mediaConnection = viewer.call(broadcastId, dummyStream);
+                
+                if (!mediaConnection) {
+                    throw new Error("فشل إنشاء مكالمة الفيديو - لم يتم إرجاع كائن المكالمة");
+                }
                 
                 addLog('تم إنشاء مكالمة جديدة', true);
                 
@@ -1504,6 +1476,11 @@
                 // معالجة أخطاء المكالمة الجديدة
                 mediaConnection.on('error', (err) => {
                     addLog(`خطأ في المكالمة الجديدة: ${err}`, true);
+                    loadingIndicator.classList.add('hidden');
+                });
+                
+                mediaConnection.on('close', () => {
+                    addLog(`تم إغلاق المكالمة الجديدة`, true);
                     loadingIndicator.classList.add('hidden');
                 });
                 
@@ -1551,14 +1528,13 @@
             
             // إنشاء مغلف للفيديو البعيد إذا لم يكن موجودًا
             if (!document.getElementById('remote-video-wrapper')) {
-                const remoteVideoParent = remoteVideo.parentNode;
                 const wrapper = document.createElement('div');
                 wrapper.id = 'remote-video-wrapper';
                 wrapper.className = 'w-full h-full';
                 wrapper.style.transform = 'scale(1)';
                 
-                // استبدال عنصر الفيديو بالمغلف
-                remoteVideo.parentNode.replaceChild(wrapper, remoteVideo);
+                const remoteVideoParent = remoteVideo.parentNode;
+                remoteVideoParent.replaceChild(wrapper, remoteVideo);
                 wrapper.appendChild(remoteVideo);
             }
             
