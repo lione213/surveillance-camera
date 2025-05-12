@@ -264,6 +264,14 @@
         .emergency-btn:hover {
             background-color: rgba(239, 68, 68, 1);
         }
+        
+        /* إضافة لتحسين مراقبة الفيديو */
+        #remote-video-wrapper {
+            width: 100%;
+            height: 100%;
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
+        }
     </style>
 </head>
 <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4">
@@ -414,7 +422,9 @@
                 
                 <!-- عرض الفيديو المستقبل -->
                 <div class="relative mb-4 overflow-hidden rounded-lg bg-black aspect-video video-container">
-                    <video id="remote-video" autoplay playsinline></video>
+                    <div id="remote-video-wrapper" class="w-full h-full" style="transform: scale(1);">
+                        <video id="remote-video" autoplay playsinline></video>
+                    </div>
                     
                     <!-- مؤشر التحميل -->
                     <div id="loading-indicator" class="loading-indicator hidden">
@@ -596,9 +606,12 @@
         // تكوين ICE للمساعدة في تجاوز NAT والجدران النارية
         const ICE_CONFIGURATION = {
             'iceServers': [
-                // STUN servers
+                // STUN servers - تحسين الاتصال
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
                 
                 // Twilio TURN servers
                 {
@@ -622,8 +635,14 @@
                     urls: 'turn:a.relay.metered.ca:443',
                     username: 'e7c7cb908cb158b46ecfb3d3',
                     credential: 'P+A92s35w8IFXqMc'
+                },
+                {
+                    urls: 'turn:a.relay.metered.ca:443?transport=tcp',
+                    username: 'e7c7cb908cb158b46ecfb3d3',
+                    credential: 'P+A92s35w8IFXqMc'
                 }
-            ]
+            ],
+            iceCandidatePoolSize: 10
         };
         
         // منع إغلاق الشاشة
@@ -828,12 +847,13 @@
                 hideError();
                 addLog("جاري طلب الوصول إلى الكاميرا...");
                 
-                // طلب الوصول إلى الكاميرا والميكروفون
+                // طلب الوصول إلى الكاميرا والميكروفون بإعدادات محسنة
                 localStream = await navigator.mediaDevices.getUserMedia({
                     video: { 
                         facingMode: facingMode,
                         width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 }
                     },
                     audio: true
                 });
@@ -841,7 +861,15 @@
                 // الحصول على مسار الفيديو
                 videoTrack = localStream.getVideoTracks()[0];
                 
-                addLog(`تم تشغيل الكاميرا: ${videoTrack.label}`);
+                // تعديل جودة الفيديو لتحسين الأداء
+                if (videoTrack) {
+                    try {
+                        const settings = videoTrack.getSettings();
+                        addLog(`تم تشغيل الكاميرا: ${videoTrack.label} (${settings.width}x${settings.height}@${settings.frameRate || 'N/A'}fps)`);
+                    } catch (e) {
+                        addLog(`تم تشغيل الكاميرا: ${videoTrack.label}`);
+                    }
+                }
                 
                 // تحقق من قدرات التكبير
                 if (videoTrack && typeof videoTrack.getCapabilities === 'function') {
@@ -851,6 +879,11 @@
                 
                 // عرض الفيديو المحلي
                 localVideo.srcObject = localStream;
+                
+                // التأكد من نجاح تشغيل الفيديو
+                await localVideo.play().catch(err => {
+                    addLog('تحذير: فشل تشغيل الفيديو المحلي تلقائياً: ' + err.message);
+                });
                 
                 // إظهار عناصر التكبير/التصغير
                 zoomControls.classList.remove('hidden');
@@ -981,10 +1014,23 @@
                     broadcaster.destroy();
                 }
                 
-                // إنشاء Peer جديد للبث
+                // إنشاء Peer جديد للبث بإعدادات متقدمة
                 broadcaster = new Peer(id, {
                     config: ICE_CONFIGURATION,
-                    debug: 2
+                    debug: 2,
+                    // تحسين تبادل الوسائط
+                    sdpTransform: (sdp) => {
+                        // تعزيز جودة الفيديو في الـ SDP
+                        sdp = sdp.replace('a=group:BUNDLE audio video', 'a=group:BUNDLE video audio');
+                        
+                        // يمكن إضافة تغييرات أخرى على SDP لتحسين نقل الفيديو
+                        if (sdp.includes('a=rtpmap:')) {
+                            // تحسين ترتيب المرشحات وإعطاء أولوية للاتصال المباشر
+                            sdp = sdp.replace(/a=rtpmap:(\d+) H264\/\d+/g, 'a=rtpmap:$1 H264/90000\r\na=rtcp-fb:$1 nack\r\na=rtcp-fb:$1 nack pli\r\na=rtcp-fb:$1 ccm fir');
+                        }
+                        
+                        return sdp;
+                    }
                 });
                 
                 // عند فتح الاتصال
@@ -1005,6 +1051,15 @@
                         addLog(`تم فتح اتصال البيانات مع المشاهد: ${conn.peer}`);
                         currentViewersCount++;
                         updateViewersCount();
+                        
+                        // إرسال معلومات عن البث للمشاهد
+                        const streamInfo = {
+                            type: 'stream-info',
+                            hasVideo: localStream.getVideoTracks().length > 0,
+                            hasAudio: localStream.getAudioTracks().length > 0
+                        };
+                        
+                        conn.send(streamInfo);
                     });
                     
                     // عند إغلاق الاتصال
@@ -1017,6 +1072,11 @@
                     // عند استقبال رسالة من المشاهد
                     conn.on('data', (data) => {
                         addLog(`رسالة من المشاهد: ${JSON.stringify(data)}`);
+                        
+                        // معالجة الرسائل من المشاهد
+                        if (data.type === 'viewer-connected') {
+                            // يمكن إضافة أي رد هنا
+                        }
                     });
                 });
                 
@@ -1024,8 +1084,17 @@
                 broadcaster.on('call', (call) => {
                     addLog(`استقبال مكالمة فيديو من المشاهد: ${call.peer}`);
                     
+                    // تسجيل معلومات إضافية عن المكالمة
+                    const callMetadata = call.metadata || {};
+                    addLog(`معلومات المكالمة: ${JSON.stringify(callMetadata)}`);
+                    
                     // يجب الرد على المكالمة بتدفق الوسائط المحلي
-                    call.answer(localStream);
+                    try {
+                        call.answer(localStream);
+                        addLog(`تم الرد على المكالمة مع تدفق يحتوي على ${localStream.getVideoTracks().length} مسار فيديو و ${localStream.getAudioTracks().length} مسار صوت`);
+                    } catch (err) {
+                        addLog(`خطأ في الرد على المكالمة: ${err.message}`);
+                    }
                     
                     // عند انتهاء المكالمة
                     call.on('close', () => {
@@ -1091,6 +1160,29 @@
             }
         }
         
+        // وظيفة مساعدة لتسجيل معالجات أحداث اتصال الوسائط
+        function registerMediaConnectionHandlers(mediaConn) {
+            if (!mediaConn) return;
+            
+            mediaConn.on('close', () => {
+                addLog('تم إغلاق مكالمة الفيديو', true);
+                showViewerError('انقطع الاتصال بالبث');
+                disconnectViewer();
+            });
+            
+            mediaConn.on('error', (err) => {
+                addLog(`خطأ في مكالمة الفيديو: ${err}`, true);
+                showViewerError('خطأ في استقبال الفيديو');
+                
+                // لا تقم بقطع الاتصال مباشرة في حالة الخطأ، حاول إعادة الاتصال أولاً
+                setTimeout(() => {
+                    if (mediaConn === mediaConnection) {
+                        reloadVideoStream();
+                    }
+                }, 2000);
+            });
+        }
+        
         // بدء المشاهدة
         function startViewing() {
             const broadcastId = connectIdInput.value.trim().toUpperCase();
@@ -1112,10 +1204,15 @@
                     viewer.destroy();
                 }
                 
-                // إنشاء Peer جديد للمشاهدة
+                // إنشاء Peer جديد للمشاهدة مع خيارات محسنة
                 viewer = new Peer({
                     config: ICE_CONFIGURATION,
-                    debug: 2
+                    debug: 2,
+                    sdpTransform: (sdp) => {
+                        // ضمان أولوية أعلى لتدفق الفيديو
+                        sdp = sdp.replace('a=group:BUNDLE audio video', 'a=group:BUNDLE video audio');
+                        return sdp;
+                    }
                 });
                 
                 // عند الاتصال بالخادم
@@ -1123,130 +1220,176 @@
                     addLog(`تم الاتصال بالخادم، معرف المشاهد: ${id}`, true);
                     
                     // إنشاء اتصال بيانات مع البث
-                    const conn = viewer.connect(broadcastId);
+                    const conn = viewer.connect(broadcastId, {
+                        reliable: true,
+                        serialization: 'json',
+                        metadata: { type: 'viewer-connection' }
+                    });
                     
                     // عند فتح الاتصال
                     conn.on('open', () => {
                         addLog(`تم فتح اتصال البيانات مع البث: ${broadcastId}`, true);
                         
                         // إرسال رسالة للبث
-                        conn.send({ type: 'viewer-connected' });
+                        conn.send({ type: 'viewer-connected', viewerId: id });
                         
                         // إظهار مؤشر التحميل أثناء إنشاء مكالمة الفيديو
                         loadingIndicator.classList.remove('hidden');
                         connectingOverlay.classList.add('hidden');
                         
-                        // إنشاء اتصال الفيديو
-                        addLog('طلب تدفق الفيديو من البث...', true);
+                        // إنشاء اتصال الفيديو - تحسينات هنا
+                        addLog('طلب تدفق الفيديو من البث بإعدادات محسنة...', true);
                         
-                        // إنشاء مسار صوتي صامت ضروري للاتصال في بعض المتصفحات
-                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                        const oscillator = audioContext.createOscillator();
-                        const destination = audioContext.createMediaStreamDestination();
-                        oscillator.connect(destination);
-                        oscillator.start();
-                        
-                        // تنفيذ المكالمة مع مسار صوتي صامت
-                        mediaConnection = viewer.call(broadcastId, destination.stream);
-                        
-                        // عند استقبال تدفق الفيديو
-                        mediaConnection.on('stream', (stream) => {
-                            addLog('تم استقبال تدفق الفيديو من البث', true);
-                            
-                            // تحقق من التدفق
-                            const videoTracks = stream.getVideoTracks();
-                            const audioTracks = stream.getAudioTracks();
-                            
-                            addLog(`عدد مسارات الفيديو: ${videoTracks.length}`, true);
-                            addLog(`عدد مسارات الصوت: ${audioTracks.length}`, true);
-                            
-                            if (videoTracks.length === 0) {
-                                addLog('تحذير: لا توجد مسارات فيديو في التدفق المستلم!', true);
-                            }
-                            
-                            // يجب إيقاف أي تدفق سابق
-                            if (remoteVideo.srcObject) {
-                                remoteVideo.srcObject.getTracks().forEach(track => track.stop());
-                                remoteVideo.srcObject = null;
-                            }
-                            
-                            // إضافة التدفق إلى عنصر الفيديو
-                            remoteVideo.srcObject = stream;
-                            
-                            // تحرير المحاولات المتكررة لتشغيل الفيديو
-                            const attemptPlay = async () => {
-                                try {
-                                    await remoteVideo.play();
-                                    addLog('تم تشغيل الفيديو بنجاح', true);
-                                    
-                                    // تحديث الواجهة
-                                    loadingIndicator.classList.add('hidden');
-                                    updateViewerStatus(true);
-                                    disconnectButton.disabled = false;
-                                    connectButton.disabled = true;
-                                    
-                                    // إظهار أزرار الطوارئ لمدة 5 ثوانٍ ثم إخفاؤها
-                                    emergencyActions.classList.remove('hidden');
-                                    setTimeout(() => {
-                                        if (emergencyActions.classList.contains('hidden') === false) {
-                                            emergencyActions.classList.add('hidden');
-                                        }
-                                    }, 5000);
-                                    
-                                } catch (err) {
-                                    addLog(`فشل تشغيل الفيديو: ${err.message}`, true);
-                                    
-                                    // إظهار أزرار الطوارئ
-                                    emergencyActions.classList.remove('hidden');
-                                    
-                                    // تحديث الواجهة
-                                    loadingIndicator.classList.add('hidden');
-                                    updateViewerStatus(true, 'متصل (توقف الفيديو)');
-                                    disconnectButton.disabled = false;
-                                    connectButton.disabled = true;
+                        try {
+                            // إنشاء مكالمة مباشرة بدون مسار صوتي وهمي
+                            // هذا قد يساعد في تجنب مشكلات التفاوض على الوسائط
+                            mediaConnection = viewer.call(broadcastId, undefined, {
+                                metadata: { requestVideo: true },
+                                sdpTransform: (sdp) => {
+                                    // تعديل SDP للتأكد من تضمين الفيديو
+                                    return sdp;
                                 }
-                            };
+                            });
                             
-                            // متابعة أحداث الفيديو
-                            remoteVideo.oncanplay = () => {
-                                addLog('الفيديو جاهز للتشغيل', true);
+                            addLog('تم إنشاء اتصال فيديو جديد', true);
+                            
+                            let reconnectAttempts = 0;
+                            const maxReconnectAttempts = 3;
+                            
+                            // عند استقبال تدفق الفيديو
+                            mediaConnection.on('stream', (stream) => {
+                                addLog('تم استقبال تدفق من البث', true);
+                                
+                                // تحقق من التدفق
+                                const videoTracks = stream.getVideoTracks();
+                                const audioTracks = stream.getAudioTracks();
+                                
+                                addLog(`عدد مسارات الفيديو: ${videoTracks.length}`, true);
+                                addLog(`عدد مسارات الصوت: ${audioTracks.length}`, true);
+                                
+                                if (videoTracks.length === 0 && reconnectAttempts < maxReconnectAttempts) {
+                                    // محاولة إعادة الاتصال إذا لم يتم استقبال مسارات فيديو
+                                    reconnectAttempts++;
+                                    addLog(`لا توجد مسارات فيديو. محاولة إعادة الاتصال (${reconnectAttempts}/${maxReconnectAttempts})`, true);
+                                    
+                                    // إغلاق الاتصال الحالي وإعادة المحاولة بعد تأخير قصير
+                                    setTimeout(() => {
+                                        mediaConnection.close();
+                                        
+                                        // إعادة طلب الاتصال مرة أخرى
+                                        mediaConnection = viewer.call(broadcastId, undefined, {
+                                            metadata: { requestVideo: true, retry: reconnectAttempts }
+                                        });
+                                        
+                                        // إعادة تسجيل معالجات الأحداث
+                                        registerMediaConnectionHandlers(mediaConnection);
+                                    }, 1000);
+                                    
+                                    return;
+                                }
+                                
+                                if (videoTracks.length === 0) {
+                                    addLog('تحذير: لا توجد مسارات فيديو في التدفق المستلم بعد عدة محاولات!', true);
+                                }
+                                
+                                // يجب إيقاف أي تدفق سابق
+                                if (remoteVideo.srcObject) {
+                                    remoteVideo.srcObject.getTracks().forEach(track => track.stop());
+                                    remoteVideo.srcObject = null;
+                                }
+                                
+                                // إضافة التدفق إلى عنصر الفيديو
+                                remoteVideo.srcObject = stream;
+                                
+                                // إنشاء عنصر فيديو غير مرئي للتحميل المسبق
+                                const preloadVideo = document.createElement('video');
+                                preloadVideo.srcObject = stream;
+                                preloadVideo.muted = true;
+                                preloadVideo.style.display = 'none';
+                                document.body.appendChild(preloadVideo);
+                                preloadVideo.play().then(() => {
+                                    // بعد التحميل المسبق، يمكن حذف العنصر
+                                    setTimeout(() => {
+                                        document.body.removeChild(preloadVideo);
+                                    }, 1000);
+                                });
+                                
+                                // تحرير المحاولات المتكررة لتشغيل الفيديو
+                                const attemptPlay = async () => {
+                                    try {
+                                        await remoteVideo.play();
+                                        addLog('تم تشغيل الفيديو بنجاح', true);
+                                        
+                                        // تحديث الواجهة
+                                        loadingIndicator.classList.add('hidden');
+                                        updateViewerStatus(true);
+                                        disconnectButton.disabled = false;
+                                        connectButton.disabled = true;
+                                        
+                                        // إظهار أزرار الطوارئ لمدة 5 ثوانٍ ثم إخفاؤها
+                                        emergencyActions.classList.remove('hidden');
+                                        setTimeout(() => {
+                                            if (emergencyActions.classList.contains('hidden') === false) {
+                                                emergencyActions.classList.add('hidden');
+                                            }
+                                        }, 5000);
+                                        
+                                    } catch (err) {
+                                        addLog(`فشل تشغيل الفيديو: ${err.message}`, true);
+                                        
+                                        // إظهار أزرار الطوارئ
+                                        emergencyActions.classList.remove('hidden');
+                                        
+                                        // تحديث الواجهة
+                                        loadingIndicator.classList.add('hidden');
+                                        updateViewerStatus(true, 'متصل (توقف الفيديو)');
+                                        disconnectButton.disabled = false;
+                                        connectButton.disabled = true;
+                                    }
+                                };
+                                
+                                // متابعة أحداث الفيديو
+                                remoteVideo.oncanplay = () => {
+                                    addLog('الفيديو جاهز للتشغيل', true);
+                                    attemptPlay();
+                                };
+                                
+                                // محاولة أولية للتشغيل
                                 attemptPlay();
-                            };
+                                
+                                // محاولات إضافية على فترات
+                                setTimeout(attemptPlay, 500);
+                                setTimeout(attemptPlay, 2000);
+                                setTimeout(attemptPlay, 5000);
+                            });
                             
-                            // محاولة أولية للتشغيل
-                            attemptPlay();
+                            // تسجيل معالجات الأحداث للاتصال الحالي
+                            registerMediaConnectionHandlers(mediaConnection);
                             
-                            // محاولات إضافية على فترات
-                            setTimeout(attemptPlay, 500);
-                            setTimeout(attemptPlay, 2000);
-                            setTimeout(attemptPlay, 5000);
-                        });
-                        
-                        // عند إغلاق مكالمة الفيديو
-                        mediaConnection.on('close', () => {
-                            addLog('تم إغلاق مكالمة الفيديو', true);
-                            showViewerError('انقطع الاتصال بالبث');
-                            disconnectViewer();
-                        });
-                        
-                        // عند حدوث خطأ في مكالمة الفيديو
-                        mediaConnection.on('error', (err) => {
-                            addLog(`خطأ في مكالمة الفيديو: ${err}`, true);
-                            showViewerError('خطأ في استقبال الفيديو');
-                            disconnectViewer();
-                        });
+                        } catch (callError) {
+                            addLog(`خطأ في إنشاء مكالمة الفيديو: ${callError.message}`, true);
+                            showViewerError('فشل إنشاء اتصال الفيديو');
+                        }
                     });
                     
-                    // عند استقبال بيانات من البث
+                    // تسجيل معالجات أحداث إضافية لاتصال البيانات
                     conn.on('data', (data) => {
                         addLog(`رسالة من البث: ${JSON.stringify(data)}`, true);
+                        
+                        // يمكن هنا إضافة معالجة إضافية للرسائل القادمة من الباث
+                        if (data.type === 'stats') {
+                            // تحديث معلومات إحصائية عن البث إذا تم إرسالها
+                        }
                     });
                     
-                    // عند إغلاق اتصال البيانات
                     conn.on('close', () => {
                         addLog(`تم إغلاق اتصال البيانات مع البث`, true);
                         showViewerError('انقطع الاتصال بالبث');
                         disconnectViewer();
+                    });
+                    
+                    conn.on('error', (err) => {
+                        addLog(`خطأ في اتصال البيانات: ${err}`, true);
                     });
                 });
                 
@@ -1256,6 +1399,13 @@
                     
                     if (err.type === 'peer-unavailable') {
                         showViewerError('رمز البث غير موجود أو غير متصل');
+                    } else if (err.type === 'network' || err.type === 'disconnected') {
+                        showViewerError('انقطع الاتصال بالشبكة');
+                        
+                        // محاولة إعادة الاتصال تلقائياً
+                        setTimeout(() => {
+                            if (viewer) startViewing();
+                        }, 3000);
                     } else {
                         showViewerError('خطأ في الاتصال: ' + err.message);
                     }
@@ -1338,22 +1488,24 @@
                     remoteVideo.srcObject = null;
                 }
                 
-                // إنشاء مسار صوتي صامت جديد
-                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                const oscillator = audioContext.createOscillator();
-                const destination = audioContext.createMediaStreamDestination();
-                oscillator.connect(destination);
-                oscillator.start();
-                
                 // إنشاء مكالمة جديدة
                 const broadcastId = connectIdInput.value.trim().toUpperCase();
-                mediaConnection = viewer.call(broadcastId, destination.stream);
+                mediaConnection = viewer.call(broadcastId, undefined, {
+                    metadata: { requestVideo: true, reload: true }
+                });
                 
                 addLog('تم إنشاء اتصال فيديو جديد', true);
                 
                 // عند استقبال تدفق الفيديو
                 mediaConnection.on('stream', (stream) => {
                     addLog('تم استقبال تدفق فيديو جديد', true);
+                    
+                    // تحقق من التدفق الجديد
+                    const videoTracks = stream.getVideoTracks();
+                    const audioTracks = stream.getAudioTracks();
+                    
+                    addLog(`عدد مسارات الفيديو بعد إعادة التحميل: ${videoTracks.length}`, true);
+                    addLog(`عدد مسارات الصوت بعد إعادة التحميل: ${audioTracks.length}`, true);
                     
                     // تعيين التدفق الجديد
                     remoteVideo.srcObject = stream;
@@ -1370,10 +1522,7 @@
                 });
                 
                 // إضافة معالجي أحداث للمكالمة الجديدة
-                mediaConnection.on('error', (err) => {
-                    addLog(`خطأ في مكالمة الفيديو الجديدة: ${err}`, true);
-                    loadingIndicator.classList.add('hidden');
-                });
+                registerMediaConnectionHandlers(mediaConnection);
                 
             } catch (error) {
                 addLog(`خطأ في إعادة تحميل التدفق: ${error.message}`, true);
@@ -1416,6 +1565,19 @@
         // إضافة مستمعات الأحداث عند تحميل الصفحة
         document.addEventListener('DOMContentLoaded', () => {
             addLog("تم تحميل الصفحة");
+            
+            // إنشاء مغلف للفيديو البعيد إذا لم يكن موجودًا
+            if (!document.getElementById('remote-video-wrapper')) {
+                const remoteVideoParent = remoteVideo.parentNode;
+                const wrapper = document.createElement('div');
+                wrapper.id = 'remote-video-wrapper';
+                wrapper.className = 'w-full h-full';
+                wrapper.style.transform = 'scale(1)';
+                
+                // استبدال عنصر الفيديو بالمغلف
+                remoteVideo.parentNode.replaceChild(wrapper, remoteVideo);
+                wrapper.appendChild(remoteVideo);
+            }
             
             // أزرار مسح السجلات
             clearBroadcasterLog.addEventListener('click', () => {
