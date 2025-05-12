@@ -34,13 +34,13 @@
     </script>
     <style>
         /* منع الضغط لتحديد النص على iOS */
-        * {
+        body, button, h1, h2, h3, h4, h5, h6, p, label, div:not(.debug-console):not(.debug-line) {
             -webkit-user-select: none;
             user-select: none;
         }
         
-        /* السماح بتحديد النص في حقول الإدخال */
-        input, textarea {
+        /* السماح بتحديد النص في حقول الإدخال والسجلات */
+        input, textarea, .debug-console, .debug-line {
             -webkit-user-select: text;
             user-select: text;
         }
@@ -227,12 +227,14 @@
             font-size: 12px;
             max-height: 120px;
             overflow-y: auto;
+            position: relative;
         }
         
         .debug-line {
             border-bottom: 1px solid rgba(255, 255, 255, 0.1);
             padding-bottom: 2px;
             margin-bottom: 2px;
+            cursor: text;
         }
         
         .debug-time {
@@ -271,6 +273,25 @@
             height: 100%;
             transform-origin: center;
             transition: transform 0.2s ease-out;
+        }
+        
+        /* زر نسخ السجل */
+        .copy-log-btn {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background-color: rgba(93, 92, 222, 0.5);
+            color: white;
+            border: none;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            cursor: pointer;
+            z-index: 5;
+        }
+        
+        .copy-log-btn:hover {
+            background-color: rgba(93, 92, 222, 0.8);
         }
     </style>
 </head>
@@ -393,12 +414,15 @@
                     </div>
                 </div>
                 
-                <div id="broadcaster-console" class="debug-console">
+                <div id="broadcaster-console" class="debug-console relative">
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-bold text-xs">سجل البث:</span>
-                        <button id="clear-broadcaster-log" class="bg-gray-600 text-xs px-2 py-1 rounded">مسح</button>
+                        <div class="flex gap-2">
+                            <button id="copy-broadcaster-log" class="bg-primary text-xs px-2 py-1 rounded">نسخ</button>
+                            <button id="clear-broadcaster-log" class="bg-gray-600 text-xs px-2 py-1 rounded">مسح</button>
+                        </div>
                     </div>
-                    <div id="broadcaster-log"></div>
+                    <div id="broadcaster-log" class="text-selection-enabled"></div>
                 </div>
             </div>
             
@@ -475,12 +499,15 @@
                     <span id="viewer-status-text">غير متصل</span>
                 </div>
                 
-                <div id="viewer-console" class="debug-console">
+                <div id="viewer-console" class="debug-console relative">
                     <div class="flex justify-between items-center mb-2">
                         <span class="font-bold text-xs">سجل المشاهدة:</span>
-                        <button id="clear-viewer-log" class="bg-gray-600 text-xs px-2 py-1 rounded">مسح</button>
+                        <div class="flex gap-2">
+                            <button id="copy-viewer-log" class="bg-primary text-xs px-2 py-1 rounded">نسخ</button>
+                            <button id="clear-viewer-log" class="bg-gray-600 text-xs px-2 py-1 rounded">مسح</button>
+                        </div>
                     </div>
-                    <div id="viewer-log"></div>
+                    <div id="viewer-log" class="text-selection-enabled"></div>
                 </div>
             </div>
             
@@ -494,6 +521,7 @@
                     <li>في حالة عدم ظهور الفيديو، اضغط على زر "تشغيل الفيديو" أو "إعادة تحميل البث".</li>
                     <li>لتجنب إغلاق الشاشة على الآيفون، قم بتغيير إعداد Auto-Lock إلى "Never".</li>
                     <li>راقب السجل لمعرفة حالة الاتصال ولتشخيص أي مشاكل.</li>
+                    <li>يمكنك نسخ السجل بالضغط على زر "نسخ" لمشاركة المعلومات مع الدعم الفني.</li>
                 </ul>
             </div>
         </main>
@@ -564,6 +592,8 @@
         const viewerLog = document.getElementById('viewer-log');
         const clearBroadcasterLog = document.getElementById('clear-broadcaster-log');
         const clearViewerLog = document.getElementById('clear-viewer-log');
+        const copyBroadcasterLog = document.getElementById('copy-broadcaster-log');
+        const copyViewerLog = document.getElementById('copy-viewer-log');
         
         // متغيرات عالمية
         let localStream = null;
@@ -576,6 +606,39 @@
         let viewerZoomValue = 1.0;
         let zoomCapabilities = false;
         let videoTrack = null;
+        
+        // وظيفة لنسخ محتوى السجل
+        function copyLogContent(logElement) {
+            if (!logElement) return;
+            
+            // تجميع محتوى السجل كنص
+            const logText = Array.from(logElement.children)
+                .map(line => line.textContent)
+                .join('\n');
+            
+            // نسخ النص إلى الحافظة
+            if (logText) {
+                navigator.clipboard.writeText(logText)
+                    .then(() => {
+                        // إظهار رسالة نجاح
+                        const successMsg = document.createElement('div');
+                        successMsg.className = 'text-center text-green-400 text-xs py-1';
+                        successMsg.textContent = 'تم نسخ السجل بنجاح!';
+                        
+                        // إضافة الرسالة فوق السجل
+                        logElement.parentNode.insertBefore(successMsg, logElement);
+                        
+                        // إزالة الرسالة بعد ثانيتين
+                        setTimeout(() => {
+                            successMsg.remove();
+                        }, 2000);
+                    })
+                    .catch(err => {
+                        console.error('فشل نسخ النص: ', err);
+                        alert('حدث خطأ أثناء محاولة نسخ السجل');
+                    });
+            }
+        }
         
         // إضافة السجلات
         function addLog(message, isViewer = false) {
@@ -1506,6 +1569,15 @@
             
             clearViewerLog.addEventListener('click', () => {
                 viewerLog.innerHTML = '';
+            });
+            
+            // أزرار نسخ السجلات
+            copyBroadcasterLog.addEventListener('click', () => {
+                copyLogContent(broadcasterLog);
+            });
+            
+            copyViewerLog.addEventListener('click', () => {
+                copyLogContent(viewerLog);
             });
             
             // أزرار التبديل بين الأوضاع
