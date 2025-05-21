@@ -293,6 +293,26 @@
         .copy-log-btn:hover {
             background-color: rgba(93, 92, 222, 0.8);
         }
+
+        /* تنسيق لمؤشر انتظار مولد الرمز */
+        @keyframes pulse {
+            0% { opacity: 0.6; }
+            50% { opacity: 1; }
+            100% { opacity: 0.6; }
+        }
+        
+        .pulsing {
+            animation: pulse 1.5s infinite ease-in-out;
+        }
+        
+        .connecting-msg {
+            text-align: center;
+            padding: 4px 0;
+            margin-top: 4px;
+            font-size: 0.75rem;
+            border-radius: 4px;
+            background-color: rgba(93, 92, 222, 0.2);
+        }
     </style>
 </head>
 <body class="bg-white dark:bg-gray-900 text-gray-800 dark:text-gray-200 min-h-screen p-4">
@@ -395,6 +415,9 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                             </svg>
                         </button>
+                    </div>
+                    <div id="broadcast-connecting-message" class="hidden connecting-msg pulsing">
+                        جاري الاتصال بخادم البث...
                     </div>
                     <p class="mt-2 text-sm">شارك هذا الرمز مع الأشخاص الذين تريد أن يشاهدوا البث.</p>
                 </div>
@@ -552,6 +575,7 @@
         const broadcastIdInput = document.getElementById('broadcast-id');
         const copyIdButton = document.getElementById('copy-id-btn');
         const connectIdInput = document.getElementById('connect-id');
+        const broadcastConnectingMessage = document.getElementById('broadcast-connecting-message');
         
         const permissionOverlay = document.getElementById('permission-overlay');
         const noStreamOverlay = document.getElementById('no-stream-overlay');
@@ -610,6 +634,14 @@
         let reconnectAttempts = 0;
         let maxReconnectAttempts = 5;
         let reconnectInterval = null;
+        let peerServers = [
+            { host: 'peerjs-server.herokuapp.com', secure: true, port: 443, path: '/' },
+            { host: 'peerjs.herokuapp.com', secure: true, port: 443, path: '/' },
+            { host: '0.peerjs.com', secure: true, port: 443, path: '/' },
+            { host: '9000-peerjs-peerjs-jwvjtbv8n5c.ws-us105.gitpod.io', secure: true, port: 443, path: '/' }
+        ];
+        let currentServerIndex = 0;
+        let codeGenerationTimeout = null;
         
         // وظيفة لنسخ محتوى السجل
         function copyLogContent(logElement) {
@@ -683,6 +715,8 @@
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
                 { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.stunprotocol.org:3478' },
+                { urls: 'stun:stun.voiparound.com:3478' },
                 
                 // خوادم TURN من metered.ca - تم تحديثها وإضافة المزيد
                 {
@@ -715,6 +749,12 @@
                     urls: 'turn:openrelay.metered.ca:443?transport=tcp',
                     username: 'openrelayproject',
                     credential: 'openrelayproject'
+                },
+                // خوادم TURN إضافية
+                {
+                    urls: 'turn:turn.anyfirewall.com:443?transport=tcp',
+                    username: 'webrtc',
+                    credential: 'webrtc'
                 }
             ],
             iceCandidatePoolSize: 10
@@ -763,7 +803,8 @@
         
         // إنشاء معرف فريد للبث
         function generateUniqueId() {
-            const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            // إنشاء معرف أقصر وأكثر وضوحًا لسهولة المشاركة
+            const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // تجنب الأحرف المتشابهة
             let id = '';
             for (let i = 0; i < 6; i++) {
                 id += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -774,11 +815,16 @@
         // تحديث حالة البث
         function updateBroadcasterStatus(isConnected, message = null) {
             if (isConnected) {
-                statusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
+                statusIndicator.classList.remove('bg-gray-400', 'bg-red-500', 'bg-yellow-500');
                 statusIndicator.classList.add('bg-green-500');
                 statusText.textContent = message || 'متصل ويعمل';
+            } else if (message && message.includes('جاري')) {
+                // حالة الاتصال قيد التقدم
+                statusIndicator.classList.remove('bg-gray-400', 'bg-red-500', 'bg-green-500');
+                statusIndicator.classList.add('bg-yellow-500');
+                statusText.textContent = message;
             } else {
-                statusIndicator.classList.remove('bg-green-500');
+                statusIndicator.classList.remove('bg-green-500', 'bg-yellow-500');
                 statusIndicator.classList.add(message ? 'bg-red-500' : 'bg-gray-400');
                 statusText.textContent = message || 'غير متصل';
             }
@@ -787,12 +833,17 @@
         // تحديث حالة المشاهد
         function updateViewerStatus(isConnected, message = null) {
             if (isConnected) {
-                viewerStatusIndicator.classList.remove('bg-gray-400', 'bg-red-500');
+                viewerStatusIndicator.classList.remove('bg-gray-400', 'bg-red-500', 'bg-yellow-500');
                 viewerStatusIndicator.classList.add('bg-green-500');
                 viewerStatusText.textContent = message || 'متصل بالبث';
                 viewerZoomControls.classList.remove('hidden');
+            } else if (message && message.includes('جاري')) {
+                // حالة الاتصال قيد التقدم
+                viewerStatusIndicator.classList.remove('bg-gray-400', 'bg-red-500', 'bg-green-500');
+                viewerStatusIndicator.classList.add('bg-yellow-500');
+                viewerStatusText.textContent = message;
             } else {
-                viewerStatusIndicator.classList.remove('bg-green-500');
+                viewerStatusIndicator.classList.remove('bg-green-500', 'bg-yellow-500');
                 viewerStatusIndicator.classList.add(message ? 'bg-red-500' : 'bg-gray-400');
                 viewerStatusText.textContent = message || 'غير متصل';
                 viewerZoomControls.classList.add('hidden');
@@ -985,7 +1036,17 @@
                         audio: true
                     };
                     
-                    localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                    try {
+                        localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                    } catch (secondError) {
+                        // محاولة أخيرة بدون تحديد الكاميرا
+                        mediaConstraints = {
+                            video: true,
+                            audio: true
+                        };
+                        
+                        localStream = await navigator.mediaDevices.getUserMedia(mediaConstraints);
+                    }
                 }
                 
                 // الحصول على مسار الفيديو
@@ -1147,7 +1208,7 @@
             }
         }
         
-        // بدء البث
+        // بدء البث مع محاولة خوادم متعددة
         function startBroadcasting(customId = null) {
             if (!localStream) {
                 showError('يجب تشغيل الكاميرا أولاً قبل بدء البث');
@@ -1165,12 +1226,33 @@
                     broadcaster.destroy();
                 }
                 
+                // إظهار رسالة الاتصال
+                broadcastIdContainer.classList.remove('hidden');
+                broadcastIdInput.value = 'جاري الاتصال...';
+                broadcastConnectingMessage.classList.remove('hidden');
+                updateBroadcasterStatus(false, 'جاري الاتصال بخادم البث...');
+                
+                // إلغاء أي مؤقت سابق لمهلة انتظار الكود
+                if (codeGenerationTimeout) {
+                    clearTimeout(codeGenerationTimeout);
+                }
+                
+                // إنشاء مؤقت جديد لمهلة انتظار الكود
+                codeGenerationTimeout = setTimeout(() => {
+                    // إذا لم يتم توليد الكود خلال 20 ثانية، جرب الخادم التالي
+                    if (broadcaster && !broadcaster.id) {
+                        addLog(`انتهت مهلة توليد الكود. محاولة استخدام خادم آخر...`);
+                        tryNextPeerServer(id);
+                    }
+                }, 20000);
+                
+                // استخدام خادم PeerJS الحالي
+                const currentServer = peerServers[currentServerIndex];
+                addLog(`محاولة الاتصال بالخادم: ${currentServer.host}`);
+                
                 // إنشاء Peer جديد للبث بإعدادات متقدمة
                 broadcaster = new Peer(id, {
-                    host: 'peerjs-server.herokuapp.com',
-                    secure: true,
-                    port: 443,
-                    path: '/',
+                    ...currentServer,
                     config: ICE_CONFIGURATION,
                     debug: 2,
                     // تحسين تبادل الوسائط
@@ -1192,9 +1274,15 @@
                 
                 // عند فتح الاتصال
                 broadcaster.on('open', (peerId) => {
+                    // إلغاء مؤقت مهلة انتظار الكود
+                    if (codeGenerationTimeout) {
+                        clearTimeout(codeGenerationTimeout);
+                        codeGenerationTimeout = null;
+                    }
+                    
                     addLog(`تم فتح اتصال البث بمعرف: ${peerId}`);
                     broadcastIdInput.value = peerId;
-                    broadcastIdContainer.classList.remove('hidden');
+                    broadcastConnectingMessage.classList.add('hidden');
                     updateBroadcasterStatus(true);
                     updateViewersCount();
                     
@@ -1291,8 +1379,27 @@
                 broadcaster.on('error', (err) => {
                     addLog(`خطأ في البث: ${err}`);
                     
-                    if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error') {
+                    // إلغاء مؤقت مهلة انتظار الكود
+                    if (codeGenerationTimeout) {
+                        clearTimeout(codeGenerationTimeout);
+                        codeGenerationTimeout = null;
+                    }
+                    
+                    if (err.type === 'peer-unavailable') {
+                        // معرف مستخدم بالفعل، إنشاء معرف جديد
+                        addLog('المعرف مستخدم بالفعل، إنشاء معرف جديد...');
+                        setTimeout(() => {
+                            startBroadcasting(); // بدء بث جديد بمعرف مختلف
+                        }, 1000);
+                    } 
+                    else if (err.type === 'network' || err.type === 'disconnected' || err.type === 'server-error' || err.type === 'socket-error') {
                         updateBroadcasterStatus(false, 'فقدان الاتصال');
+                        
+                        // محاولة خادم آخر إذا فشل هذا الخادم
+                        if (err.type === 'server-error' || err.type === 'socket-error' || err.message.includes('server') || err.message.includes('socket')) {
+                            tryNextPeerServer(id);
+                            return;
+                        }
                         
                         // تشغيل إعادة اتصال متكررة
                         if (!reconnectInterval && reconnectAttempts < maxReconnectAttempts) {
@@ -1305,6 +1412,9 @@
                                     addLog('وصلت للحد الأقصى من محاولات إعادة الاتصال');
                                     clearInterval(reconnectInterval);
                                     reconnectInterval = null;
+                                    
+                                    // جرب الخادم التالي
+                                    tryNextPeerServer(id);
                                     return;
                                 }
                                 
@@ -1317,13 +1427,8 @@
                                 }
                             }, 3000);
                         }
-                    } else if (err.type === 'peer-unavailable') {
-                        // معرف مستخدم بالفعل، إنشاء معرف جديد
-                        addLog('المعرف مستخدم بالفعل، إنشاء معرف جديد...');
-                        setTimeout(() => {
-                            startBroadcasting(); // بدء بث جديد بمعرف مختلف
-                        }, 1000);
                     } else {
+                        broadcastConnectingMessage.classList.add('hidden');
                         showError('خطأ في البث: ' + err.message);
                     }
                 });
@@ -1341,18 +1446,65 @@
                             reconnectAttempts++;
                         } catch (reconnectErr) {
                             addLog(`فشل محاولة إعادة الاتصال: ${reconnectErr.message}`);
+                            
+                            // جرب الخادم التالي
+                            tryNextPeerServer(id);
                         }
                     }
                 });
                 
             } catch (error) {
                 addLog(`خطأ في بدء البث: ${error.message}`);
+                broadcastConnectingMessage.classList.add('hidden');
                 showError('خطأ في بدء البث: ' + error.message);
+                
+                // جرب الخادم التالي
+                tryNextPeerServer(generateUniqueId());
             }
+        }
+        
+        // محاولة استخدام خادم PeerJS التالي
+        function tryNextPeerServer(broadcastId) {
+            // إلغاء المؤقتات النشطة
+            if (codeGenerationTimeout) {
+                clearTimeout(codeGenerationTimeout);
+                codeGenerationTimeout = null;
+            }
+            
+            if (reconnectInterval) {
+                clearInterval(reconnectInterval);
+                reconnectInterval = null;
+            }
+            
+            // تدمير كائن البث الحالي
+            if (broadcaster) {
+                try {
+                    broadcaster.destroy();
+                } catch (e) {
+                    // تجاهل الأخطاء
+                }
+                broadcaster = null;
+            }
+            
+            // الانتقال إلى خادم آخر
+            currentServerIndex = (currentServerIndex + 1) % peerServers.length;
+            addLog(`محاولة خادم آخر - ${peerServers[currentServerIndex].host}`);
+            
+            // تحديث الواجهة
+            updateBroadcasterStatus(false, 'جاري الاتصال بخادم بديل...');
+            
+            // بدء البث مع الخادم الجديد
+            startBroadcasting(broadcastId);
         }
         
         // إيقاف البث
         function stopBroadcasting() {
+            // إلغاء مؤقت مهلة انتظار الكود
+            if (codeGenerationTimeout) {
+                clearTimeout(codeGenerationTimeout);
+                codeGenerationTimeout = null;
+            }
+            
             if (broadcaster) {
                 addLog('إيقاف البث');
                 
@@ -1373,6 +1525,7 @@
                 
                 // إعادة تعيين حالة البث
                 broadcastIdContainer.classList.add('hidden');
+                broadcastConnectingMessage.classList.add('hidden');
                 broadcastIdInput.value = '';
                 currentViewersCount = 0;
                 updateViewersCount();
@@ -1423,12 +1576,13 @@
             disconnectViewer();
             
             try {
-                // إنشاء Peer جديد باستخدام نفس خادم PeerJS
+                // استخدم نفس خادم PeerJS المستخدم حاليًا
+                const currentServer = peerServers[currentServerIndex];
+                addLog(`استخدام خادم المشاهدة: ${currentServer.host}`, true);
+                
+                // إنشاء Peer جديد باستخدام الخادم الحالي
                 viewer = new Peer({
-                    host: 'peerjs-server.herokuapp.com',
-                    secure: true,
-                    port: 443,
-                    path: '/',
+                    ...currentServer,
                     config: ICE_CONFIGURATION,
                     debug: 2
                 });
